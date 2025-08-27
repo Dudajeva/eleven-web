@@ -5,9 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
   plugins: [
     vue(),
@@ -29,5 +27,15 @@ export default defineConfig({
       workbox: { navigateFallback: '/index.html' }
     })
   ],
-  server: { port: 5173, open: true }
+  server: {
+    port: 5173,
+    open: true,
+    // ✅ 开发态反向代理到后端（http://localhost:8080）
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      }
+    }
+  }
 })
