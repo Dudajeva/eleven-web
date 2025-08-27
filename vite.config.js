@@ -1,14 +1,18 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url))
+    }
+  },
   plugins: [
     vue(),
     VitePWA({
-      // ✅ 关键：开发环境也启用 SW/Manifest
       devOptions: { enabled: true },
-
       registerType: 'autoUpdate',
       manifest: {
         name: 'Meet PWA',
@@ -24,5 +28,6 @@ export default defineConfig({
       },
       workbox: { navigateFallback: '/index.html' }
     })
-  ]
+  ],
+  server: { port: 5173, open: true }
 })

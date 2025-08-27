@@ -1,16 +1,22 @@
 <template>
-  <main class="wrap">
-    <h1>Meet（PWA）</h1>
-    <p>最小可跑骨架已就绪。下一步我们会加入：路由、登录页壳子、Pinia。</p>
-    <p class="tip">你可以把本页面“安装到桌面”测试 PWA 效果。</p>
-  </main>
+  <RouterView />
 </template>
 
 <script setup>
-// 暂无逻辑，占位
+// 顶层仅作为路由出口
 </script>
 
-<style scoped>
-.wrap { max-width: 720px; margin: 20vh auto; padding: 0 16px; text-align: center; }
-.tip { color: #666; font-size: 14px; margin-top: 12px; }
+<style>
+/* 一点全局基础样式，保证字体和背景更接近你的切图 */
+html, body, #app {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  "Helvetica Neue", Arial, "Noto Sans", "PingFang SC", "Hiragino Sans GB",
+  "Microsoft YaHei", sans-serif;
+  background: #ffffff;
+  color: #111827;
+}
 </style>

@@ -1,7 +1,12 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
+import router from './router'
 import { registerSW } from 'virtual:pwa-register'
 
-registerSW() // 注册 Service Worker（PWA 必需）
+registerSW()
 
-createApp(App).mount('#app')
+const app = createApp(App)
+app.use(createPinia())
+app.use(router)
+app.mount('#app')
