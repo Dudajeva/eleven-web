@@ -1,0 +1,26 @@
+:root {
+  /* 基础文本与背景 */
+  --c-text: #000000;
+  --c-text-muted: #9ca5ae;
+  --c-text-tip-orange: #ff8519;
+  --c-text-tip-blue: #4576f3;
+  --c-text-tip-red: #eb1c34;
+  --c-bg-light: #f3f2f8;
+  --c-bg-white: #ffffff;
+  --c-tag-active: #e8669a;
+  --c-btn-purple-text: #895eeb;
+
+  /* 注册按钮 */
+  --btn-register-disabled-from: #efbdd1;
+  --btn-register-disabled-to: #cbaef2;
+  --btn-register-enabled-from: #ff9cb3;
+  --btn-register-enabled-to: #8f48ef;
+  --btn-register-active-from: #d26c94;
+  --btn-register-active-to: #7337c3;
+
+  /* 登录按钮 */
+  --btn-login-disabled-bg: #f8f6fd;
+  --btn-login-disabled-text: #c5aef9;
+  --btn-login-enabled-bg: #eee7ff;
+  --btn-login-active-bg: #d7c6fd;
+}
