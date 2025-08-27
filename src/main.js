@@ -4,6 +4,7 @@ import App from './App.vue'
 import router from './router'
 import { registerSW } from 'virtual:pwa-register'
 import './styles/tokens.css'
+import '@/assets/styles/fonts.css'
 
 registerSW()
 
