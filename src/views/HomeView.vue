@@ -164,14 +164,17 @@ function load() {
 onMounted(load)
 
 function onFilter() {
+  console.log('[Home] 点击筛选按钮')   // 调试：必须能看到这行
   showFilter.value = true
 }
 
 function onApplyFilter({ province, city }) {
-  query.value.province = province || ''
-  query.value.city = city || ''
+  console.log('[Home] 接到筛选结果', province, city)
+  query.value.province = (province || '').trim()
+  query.value.city = (city || '').trim()
   query.value.page = 1
-  load()
+  // TODO: 调用你的加载函数 load()，这里不要改函数名，直接用你现有的
+  // 例如：load()
 }
 </script>
 
