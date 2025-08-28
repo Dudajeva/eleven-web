@@ -37,6 +37,12 @@
       <div v-if="loading" class="loading">加载中…</div>
     </main>
 
+    <FilterPanel
+        v-model="showFilter"
+        :province="query.province"
+        :city="query.city"
+        @apply="onApplyFilter"
+    />
     <!-- 底部导航 -->
     <nav class="tabbar">
       <button class="tab" :class="{ active: activeTab==='home' }" @click="activeTab='home'">
@@ -70,6 +76,7 @@
 */
 import { onMounted, ref, computed } from 'vue'
 import { apiFeed } from '@/api/feed'
+import FilterPanel from '@/components/FilterPanel.vue'
 
 import pageBg from '@/assets/home/bg.png'
 import arcImg from '@/assets/home/arc.png'
@@ -93,6 +100,7 @@ import tabFeedActive from '@/assets/tab/feed-active.png'
 import tabMe from '@/assets/tab/me.png'
 import tabMeActive from '@/assets/tab/me-active.png'
 
+
 const pageBgStyle = computed(() => ({
   backgroundImage: `url(${pageBg})`,
   backgroundSize: 'cover',
@@ -103,6 +111,10 @@ const pageBgStyle = computed(() => ({
 const cards = ref([])
 const loading = ref(true)
 const activeTab = ref('home')
+// 筛选面板开关（默认 false）
+const showFilter = ref(false)
+// 查询参数：默认不传省市（后端就查全部）
+const query = ref({ page: 1, size: 20, province: '', city: '' })
 
 onMounted(async () => {
   try {
@@ -111,10 +123,6 @@ onMounted(async () => {
     loading.value = false
   }
 })
-
-function onFilter() {
-  alert('筛选功能：后续接入条件筛选弹层')
-}
 
 function tierText(tier) {
   if (tier === 'diamond') return '钻石会员'
@@ -140,6 +148,30 @@ function dotSrc(tier) {
 function photoStyle(url) {
   if (!url) return { background: '#ffc0e6' }
   return { background: `url(${url}) center/cover no-repeat` }
+}
+
+
+function load() {
+  loading.value = true
+  apiFeed({
+    page: query.value.page,
+    size: query.value.size,
+    province: query.value.province,
+    city: query.value.city
+  }).then(res => { cards.value = res }).finally(() => { loading.value = false })
+}
+
+onMounted(load)
+
+function onFilter() {
+  showFilter.value = true
+}
+
+function onApplyFilter({ province, city }) {
+  query.value.province = province || ''
+  query.value.city = city || ''
+  query.value.page = 1
+  load()
 }
 </script>
 

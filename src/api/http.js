@@ -6,15 +6,42 @@ function getToken() {
   return localStorage.getItem('auth_token') || ''
 }
 
-async function request(path, { method = 'GET', body, headers } = {}) {
-  const res = await fetch(BASE + path, {
+/**
+ * 把 config.params 拼到 URL 上（支持中文）
+ */
+function withQuery(path = '', params) {
+  if (!params || typeof params !== 'object') return path
+  const qs = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null) return
+    // 只跳过空字符串时，把下面改成 if (v !== '') qs.append(k, v)
+    qs.append(k, String(v))
+  })
+  const s = qs.toString()
+  return s ? `${path}${path.includes('?') ? '&' : '?'}${s}` : path
+}
+
+/**
+ * 统一请求：支持 method/body/headers/params
+ */
+async function request(path, { method = 'GET', body, headers, params } = {}) {
+  const url = withQuery(BASE + path, params)
+
+  // 只在有 token 时加 Authorization
+  const token = getToken()
+  const finalHeaders = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(headers || {})
+  }
+
+  // 调试日志：看最终 URL 和 params
+  // console.debug('[HTTP]', method, url)
+
+  const res = await fetch(url, {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': getToken() ? `Bearer ${getToken()}` : undefined,
-      ...(headers || {})
-    },
-    body: body ? JSON.stringify(body) : undefined
+    headers: finalHeaders,
+    body: body ? JSON.stringify(body) : undefined,
   })
 
   const text = await res.text()
@@ -22,7 +49,6 @@ async function request(path, { method = 'GET', body, headers } = {}) {
   try { data = text ? JSON.parse(text) : null } catch { data = text }
 
   if (res.status === 401) {
-    // 清理本地态并跳登录
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     const redirect = router.currentRoute.value.fullPath
@@ -42,6 +68,7 @@ async function request(path, { method = 'GET', body, headers } = {}) {
 }
 
 export const http = {
-  get: (p) => request(p),
-  post: (p, body) => request(p, { method: 'POST', body }),
+  // 现在支持第二个 config：{ params, headers, ... }
+  get: (p, config = {}) => request(p, { method: 'GET', ...(config || {}) }),
+  post: (p, body, config = {}) => request(p, { method: 'POST', body, ...(config || {}) }),
 }
