@@ -98,21 +98,6 @@
         </label>
       </div>
     </section>
-
-    <!-- 底部导航（通常是全局组件；这里仅提供图标占位版本，若你已有全局 TabBar 可删除本块） -->
-    <nav class="tabbar" v-if="showLocalTabbar">
-      <div
-          v-for="(t, idx) in tabs"
-          :key="idx"
-          class="tab"
-          :class="{ active: t.active }"
-          @click="activateTab(idx)"
-      >
-        <!-- 切图：Tab 图标（未选中/选中各一张；此处都先占位） -->
-        <img class="tab-icon" :src="replaceImg" :alt="t.name" />
-        <span class="tab-text">{{ t.name }}</span>
-      </div>
-    </nav>
   </div>
 </template>
 
@@ -127,20 +112,6 @@ const expireDate = ref('2025-07-01')
 const inviteLeft = ref(5)
 const hideProfile = ref(false)
 
-// 如果你的底部导航是全局组件，把 showLocalTabbar 设为 false 或删除 nav 块
-const showLocalTabbar = false
-const tabs = ref([
-  { name: '首页', active: false },
-  { name: '邀约', active: false },
-  { name: '消息', active: false },
-  { name: '动态', active: false },
-  { name: '我的', active: true }
-])
-
-function activateTab(i) {
-  tabs.value.forEach((t, idx) => (t.active = idx === i))
-}
-
 // 路由跳转占位
 function goRecharge() {}
 function goEditProfile() {}
@@ -151,10 +122,9 @@ function callService() {}
 <style scoped>
 .my-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #f6ecff 0%, #f7f2ff 30%, #ffffff 100%);
-  display: flex;
-  flex-direction: column;
-  padding-bottom: 84px; /* 给底部导航留白 */
+  padding-bottom: 72px;
+  position: relative;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 }
 
 /* 顶部 */
@@ -333,33 +303,5 @@ function callService() {}
 }
 .switch input:checked + .slider:before {
   transform: translateX(20px);
-}
-
-/* 本地演示用 TabBar（如果你已有全局 TabBar，可以删掉本块） */
-.tabbar {
-  position: fixed;
-  bottom: 0;
-  left: 0; right: 0;
-  height: 64px;
-  background: #fff;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  border-top: 1px solid #f1f2f5;
-}
-.tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #9ca5ae;
-}
-.tab.active {
-  color: #ff5a93; /* 你的设计 token 可替换 */
-}
-.tab-icon {
-  width: 22px;
-  height: 22px;
 }
 </style>

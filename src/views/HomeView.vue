@@ -62,17 +62,6 @@ import dotNormal from '@/assets/home/dot-normal.png'
 import dotDiamond from '@/assets/home/dot-diamond.png'
 import dotSupreme from '@/assets/home/dot-supreme.png'
 
-import tabHome from '@/assets/tab/home.png'
-import tabHomeActive from '@/assets/tab/home-active.png'
-import tabInvite from '@/assets/tab/invite.png'
-import tabInviteActive from '@/assets/tab/invite-active.png'
-import tabMsg from '@/assets/tab/msg.png'
-import tabMsgActive from '@/assets/tab/msg-active.png'
-import tabFeed from '@/assets/tab/feed.png'
-import tabFeedActive from '@/assets/tab/feed-active.png'
-import tabMe from '@/assets/tab/me.png'
-import tabMeActive from '@/assets/tab/me-active.png'
-
 const pageBgStyle = computed(() => ({
   backgroundImage: `url(${pageBg})`,
   backgroundSize: 'cover',
@@ -82,7 +71,6 @@ const pageBgStyle = computed(() => ({
 
 const cards = ref([])
 const loading = ref(true)
-const activeTab = ref('home')
 
 // 筛选面板开关
 const showFilter = ref(false)
@@ -318,43 +306,6 @@ function photoStyle(url) {
   text-align: center;
   color: #9ca5ae;
   padding: 16px 0 24px;
-}
-
-/* 底部导航：文字 Web 等效 14px Regular
-   未选中 #9CA5AE，选中使用规范紫色 */
-.tabbar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 64px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  background: #ffffff;
-  box-shadow: 0 -2px 10px rgba(17,24,39,.06);
-  z-index: 6;
-}
-.tab {
-  background: transparent;
-  border: none;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-}
-.tab img {
-  width: 22px;
-  height: 22px;
-  margin-bottom: 2px;
-  display: block;
-}
-.tab .tab-txt {
-  font-size: 14px;
-  font-weight: 400;
-  color: #9ca5ae;
-  line-height: 1;
-}
-.tab.active .tab-txt {
-  color: var(--c-btn-purple-text);
 }
 
 /* 小屏微调 */

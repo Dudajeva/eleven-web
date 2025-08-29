@@ -22,8 +22,7 @@ body {
   color: #111827;
 }
 
-/* 给所有页面预留底部空间，避免被 TabBar 遮住 */
-#app, .page-root, .home, .my-page {
-  padding-bottom: 84px; /* 你可以按实际高度微调 */
-}
+/* 统一给页面留出底部空间，避免被底栏挡住 */
+html, body, #app { height: 100%; }
+.page-root, .home, .my-page { padding-bottom: 72px; }
 </style>
