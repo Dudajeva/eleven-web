@@ -1,71 +1,75 @@
 <template>
   <div class="login-wrap">
     <!-- 背景图 -->
-    <img class="bg" src="@/assets/login/bg@2x.png" alt="背景" />
+    <img class="bg" :src="bgImg" alt="" />
 
     <div class="content">
       <!-- 顶部图标 + 标题 -->
-      <img class="logo" src="@/assets/login/logo@2x.png" alt="Logo" />
+      <img class="logo" :src="logoImg" alt="Logo" />
       <h1 class="title">APP Name</h1>
 
-      <!-- 邮箱或电话 -->
-      <div class="group">
-        <label class="label">邮箱或电话</label>
-        <input
-          class="input"
-          v-model.trim="identity"
-          placeholder="请输入邮箱或电话"
-          autocomplete="username"
-          @keydown.enter="onSubmit"
-        />
-      </div>
-
-      <!-- 密码 -->
-      <div class="group">
-        <label class="label">密码</label>
-
-        <!-- 容器用于定位右侧小眼睛 -->
-        <div class="pwd-box">
+      <!-- 用 form 统一处理回车/点击提交 -->
+      <form @submit.prevent="onSubmit" novalidate>
+        <!-- 邮箱或电话 -->
+        <div class="group">
+          <label class="label" for="identity">邮箱或电话</label>
           <input
-            class="input"
-            :type="showPwd ? 'text' : 'password'"
-            v-model.trim="password"
-            placeholder="请输入密码"
-            autocomplete="current-password"
-            @keydown.enter="onSubmit"
+              id="identity"
+              class="input"
+              v-model.trim="identity"
+              type="text"
+              placeholder="请输入邮箱或电话"
+              inputmode="email"
+              autocomplete="username"
+              :aria-invalid="Boolean(error)"
+              :aria-describedby="error ? 'login-error' : undefined"
           />
-
-          <!-- 小眼睛：PNG 贴右 + 垂直居中，40×40 热区 -->
-          <button
-            type="button"
-            class="eye-btn"
-            @click="showPwd = !showPwd"
-            aria-label="切换密码可见性"
-            :title="showPwd ? '隐藏密码' : '显示密码'"
-          >
-            <img
-              class="eye-icn"
-              :src="showPwd ? eyeOpen : eyeClose"
-              :alt="showPwd ? '隐藏' : '显示'"
-              draggable="false"
-            />
-          </button>
         </div>
 
-        <p v-if="error" class="error">{{ error }}</p>
-      </div>
+        <!-- 密码 -->
+        <div class="group">
+          <label class="label" for="password">密码</label>
 
-      <!-- 找回密码 -->
-      <button class="text-btn" type="button" @click="onForgot">找回密码</button>
+          <div class="pwd-box">
+            <input
+                id="password"
+                class="input"
+                :type="showPwd ? 'text' : 'password'"
+                v-model.trim="password"
+                placeholder="请输入密码"
+                autocomplete="current-password"
+                :aria-invalid="Boolean(error)"
+                :aria-describedby="error ? 'login-error' : undefined"
+            />
 
-      <!-- 登录按钮：禁用联动输入状态 -->
-      <button
-        class="btn"
-        :disabled="!identity || !password || submitting"
-        @click="onSubmit"
-      >
-        {{ submitting ? '登录中…' : '登录' }}
-      </button>
+            <!-- 小眼睛：密码为空时禁用（避免误触感受差） -->
+            <button
+                type="button"
+                class="eye-btn"
+                :disabled="!password"
+                @click="togglePwd"
+                :aria-label="showPwd ? '隐藏密码' : '显示密码'"
+                :title="showPwd ? '隐藏密码' : '显示密码'"
+            >
+              <img class="eye-icn" :src="showPwd ? eyeOpen : eyeClose" alt="" draggable="false" />
+            </button>
+          </div>
+
+          <p v-if="error" id="login-error" class="error">{{ error }}</p>
+        </div>
+
+        <!-- 找回密码 -->
+        <button class="text-btn" type="button" @click="onForgot">找回密码</button>
+
+        <!-- 登录按钮：禁用联动输入状态 -->
+        <button
+            class="btn"
+            type="submit"
+            :disabled="!identity || !password || submitting"
+        >
+          {{ submitting ? '登录中…' : '登录' }}
+        </button>
+      </form>
 
       <!-- 注册 -->
       <p class="footer">
@@ -78,14 +82,18 @@
 
 <script setup>
 /*
-  说明：
-  - 使用 PNG 素材（eye-open.png / eye-close.png）
-  - showPwd 控制 input 的 type 与图标切换
-  - 提交时根据后端返回设置 error 文案
+  调整点：
+  - 改用 <form @submit.prevent="onSubmit"> 统一提交
+  - 背景/Logo 采用 import 引入，构建哈希稳定
+  - 输入绑定 aria 属性，提升可访问性
+  - 密码为空时禁用“眼睛”按钮，避免无效点击
 */
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+
+import bgImg from '@/assets/login/bg@2x.png'
+import logoImg from '@/assets/login/logo@2x.png'
 import eyeOpen from '@/assets/login/eye-open.png'
 import eyeClose from '@/assets/login/eye-close.png'
 
@@ -98,6 +106,11 @@ const password = ref('')
 const showPwd = ref(false)
 const submitting = ref(false)
 const error = ref('')
+
+function togglePwd() {
+  if (!password.value) return
+  showPwd.value = !showPwd.value
+}
 
 function onForgot() {
   alert('忘记密码：后续接入找回流程')
@@ -115,6 +128,7 @@ async function onSubmit() {
     await auth.login({ identity: identity.value, password: password.value })
     router.replace((route.query.redirect || '/') + '')
   } catch (e) {
+    // 后端返回 message 优先，否则给出通用提示
     error.value = e?.message || '用户名或密码错误'
   } finally {
     submitting.value = false
@@ -123,19 +137,15 @@ async function onSubmit() {
 </script>
 
 <style scoped>
-/* 统一盒模型，避免宽度计算差异 */
 *, *::before, *::after { box-sizing: border-box; }
 
-/* 原：background: var(--c-bg-white); 这里不要盖住背景图 */
 .login-wrap {
   position: relative;
   min-height: 100vh;
-  /* background: var(--c-bg-white);  删掉或改为透明 */
   background: transparent;
   overflow: hidden;
 }
 
-/* 原：z-index: -1;  改为 0，让它在容器内可见 */
 .bg {
   position: absolute;
   inset: 0;
@@ -147,7 +157,6 @@ async function onSubmit() {
   z-index: 0;
 }
 
-/* 内容在图片之上 */
 .content {
   position: relative;
   z-index: 1;
@@ -158,23 +167,17 @@ async function onSubmit() {
   color: var(--c-text);
 }
 
-.logo {
-  width: 110px; height: 110px; object-fit: contain;
-  margin: 0 auto 8px; display: block;
-}
+.logo { width: 110px; height: 110px; object-fit: contain; margin: 0 auto 8px; display: block; }
 .title { margin: 0 0 18px; font-size: 28px; font-weight: 800; color: var(--c-text); }
 
-/* 表单组 */
 .group { margin-top: 18px; text-align: left; }
 .label { display: block; font-size: 14px; color: var(--c-text); margin: 0 0 8px; }
 
-/* 输入框（与按钮同宽） */
 .input {
   display: block;
   width: 100%;
   height: 48px;
-  /* 右侧为小眼睛预留 56px 内边距，避免文字覆盖图标 */
-  padding: 0 56px 0 18px;
+  padding: 0 56px 0 18px; /* 右侧为小眼睛预留 56px */
   border: none;
   border-radius: 999px;
   background: var(--c-bg-light);
@@ -184,10 +187,8 @@ async function onSubmit() {
 }
 .input::placeholder { color: var(--c-text-muted); }
 
-/* 密码框 + 眼睛定位 */
 .pwd-box { position: relative; }
 
-/* 小眼睛按钮：绝对定位，热区 40×40，图标置中 */
 .eye-btn {
   position: absolute;
   right: 12px;
@@ -204,19 +205,10 @@ async function onSubmit() {
   z-index: 1;
   border-radius: 50%;
 }
-.eye-btn:active {
-  /* 点击微弱反馈，可按需去掉 */
-  background: rgba(0,0,0,0.04);
-}
-.eye-icn {
-  width: 22px;
-  height: 22px;
-  display: block;
-  object-fit: contain;
-  pointer-events: none;
-}
+.eye-btn:disabled { opacity: .4; cursor: default; }
+.eye-btn:active:not(:disabled) { background: rgba(0,0,0,0.04); }
+.eye-icn { width: 22px; height: 22px; display: block; object-fit: contain; pointer-events: none; }
 
-/* 错误提示 */
 .error {
   color: var(--c-text-tip-red);
   font-size: 13px;
@@ -224,15 +216,17 @@ async function onSubmit() {
   text-align: right;
 }
 
-/* 辅助文本按钮 */
 .text-btn {
   margin-top: 10px;
-  background: transparent; border: none;
+  background: transparent;
+  border: none;
   color: var(--c-text-tip-blue);
-  font-size: 14px; padding: 0; cursor: pointer; text-align: left;
+  font-size: 14px;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
 }
 
-/* 登录按钮（与输入框等宽，三态颜色来自 tokens） */
 .btn {
   display: block;
   width: 100%;
@@ -254,7 +248,6 @@ async function onSubmit() {
 }
 .btn:active:not(:disabled) { background: var(--btn-login-active-bg); }
 
-/* 底部文案 */
 .footer { margin-top: 16px; color: var(--c-text-muted); font-size: 14px; }
 .link { background: transparent; border: none; color: var(--c-btn-purple-text); font-size: 14px; cursor: pointer; padding-left: 4px; }
 </style>

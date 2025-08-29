@@ -43,37 +43,10 @@
         :city="query.city"
         @apply="onApplyFilter"
     />
-    <!-- 底部导航 -->
-    <nav class="tabbar">
-      <button class="tab" :class="{ active: activeTab==='home' }" @click="activeTab='home'">
-        <img :src="activeTab==='home' ? tabHomeActive : tabHome" alt="首页" />
-        <span class="tab-txt">首页</span>
-      </button>
-      <button class="tab" :class="{ active: activeTab==='invite' }" @click="activeTab='invite'">
-        <img :src="activeTab==='invite' ? tabInviteActive : tabInvite" alt="邀约" />
-        <span class="tab-txt">邀约</span>
-      </button>
-      <button class="tab" :class="{ active: activeTab==='msg' }" @click="activeTab='msg'">
-        <img :src="activeTab==='msg' ? tabMsgActive : tabMsg" alt="消息" />
-        <span class="tab-txt">消息</span>
-      </button>
-      <button class="tab" :class="{ active: activeTab==='feed' }" @click="activeTab='feed'">
-        <img :src="activeTab==='feed' ? tabFeedActive : tabFeed" alt="动态" />
-        <span class="tab-txt">动态</span>
-      </button>
-      <button class="tab" :class="{ active: activeTab==='me' }" @click="activeTab='me'">
-        <img :src="activeTab==='me' ? tabMeActive : tabMe" alt="我的" />
-        <span class="tab-txt">我的</span>
-      </button>
-    </nav>
   </div>
 </template>
 
 <script setup>
-/*
-  首页（字体与字号按 Web 等效值调整）
-  字体家族统一为 PingFang SC 优先，fallback 到常见中文/西文字体
-*/
 import { onMounted, ref, computed } from 'vue'
 import { apiFeed } from '@/api/feed'
 import FilterPanel from '@/components/FilterPanel.vue'
@@ -100,7 +73,6 @@ import tabFeedActive from '@/assets/tab/feed-active.png'
 import tabMe from '@/assets/tab/me.png'
 import tabMeActive from '@/assets/tab/me-active.png'
 
-
 const pageBgStyle = computed(() => ({
   backgroundImage: `url(${pageBg})`,
   backgroundSize: 'cover',
@@ -111,29 +83,54 @@ const pageBgStyle = computed(() => ({
 const cards = ref([])
 const loading = ref(true)
 const activeTab = ref('home')
-// 筛选面板开关（默认 false）
+
+// 筛选面板开关
 const showFilter = ref(false)
-// 查询参数：默认不传省市（后端就查全部）
+
+// 查询参数（省市默认空表示不过滤）
 const query = ref({ page: 1, size: 20, province: '', city: '' })
 
-onMounted(async () => {
+// 统一的加载函数：始终从 query 取参
+async function load() {
+  loading.value = true
   try {
-    cards.value = await apiFeed()
+    const res = await apiFeed({
+      page: query.value.page,
+      size: query.value.size,
+      province: query.value.province,
+      city: query.value.city
+    })
+    cards.value = Array.isArray(res) ? res : []
   } finally {
     loading.value = false
   }
-})
+}
 
+// 首次进入首页：按当前 query 拉一页
+onMounted(load)
+
+// 打开筛选面板
+function onFilter() {
+  showFilter.value = true
+}
+
+// 接收筛选结果：更新 query 并立即刷新列表
+function onApplyFilter({ province, city }) {
+  query.value.province = (province || '').trim()
+  query.value.city = (city || '').trim()
+  query.value.page = 1
+  load()
+}
+
+// 会员标签相关工具函数（保持不变）
 function tierText(tier) {
   if (tier === 'diamond') return '钻石会员'
   if (tier === 'supreme') return '至尊会员'
   return '普通会员'
 }
-
 function tierClass(tier) {
   return `tier-${tier || 'normal'}`
 }
-
 function badgeSrc(tier) {
   if (tier === 'diamond') return badgeDiamond
   if (tier === 'supreme') return badgeSupreme
@@ -144,37 +141,9 @@ function dotSrc(tier) {
   if (tier === 'supreme') return dotSupreme
   return dotNormal
 }
-
 function photoStyle(url) {
   if (!url) return { background: '#ffc0e6' }
   return { background: `url(${url}) center/cover no-repeat` }
-}
-
-
-function load() {
-  loading.value = true
-  apiFeed({
-    page: query.value.page,
-    size: query.value.size,
-    province: query.value.province,
-    city: query.value.city
-  }).then(res => { cards.value = res }).finally(() => { loading.value = false })
-}
-
-onMounted(load)
-
-function onFilter() {
-  console.log('[Home] 点击筛选按钮')   // 调试：必须能看到这行
-  showFilter.value = true
-}
-
-function onApplyFilter({ province, city }) {
-  console.log('[Home] 接到筛选结果', province, city)
-  query.value.province = (province || '').trim()
-  query.value.city = (city || '').trim()
-  query.value.page = 1
-  // TODO: 调用你的加载函数 load()，这里不要改函数名，直接用你现有的
-  // 例如：load()
 }
 </script>
 

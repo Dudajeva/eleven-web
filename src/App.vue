@@ -1,8 +1,10 @@
 <template>
   <RouterView />
+  <TabBar />
 </template>
 
 <script setup>
+import TabBar from '@/components/TabBar.vue'
 // 顶层仅作为路由出口
 </script>
 
@@ -18,5 +20,10 @@ body {
   "Microsoft YaHei", sans-serif;
   background: #ffffff;
   color: #111827;
+}
+
+/* 给所有页面预留底部空间，避免被 TabBar 遮住 */
+#app, .page-root, .home, .my-page {
+  padding-bottom: 84px; /* 你可以按实际高度微调 */
 }
 </style>
