@@ -21,8 +21,8 @@ const router = createRouter({
         { path: '/msg',    name: 'msg',    component: MsgView,    meta: { requiresAuth: true } }, // 可选
         { path: '/feed',   name: 'feed',   component: FeedView,   meta: { requiresAuth: true } }, // 可选
         { path: '/my',     name: 'my',     component: MyView,     meta: { requiresAuth: true } }, // 新增
-        { path: '/profile/edit',     name: 'profileEdit',     component: ProfileEditView,     meta: { requiresAuth: true } },
-        { path: '/settings', name: 'settings', component: SettingsView },
+        { path: '/profile/edit',     name: 'profileEdit',     component: ProfileEditView,     meta: { requiresAuth: true ,hideTabbar: true} },
+        { path: '/settings', name: 'settings', component: SettingsView,meta: { requiresAuth: true } },
         { path: '/:pathMatch(.*)*', redirect: '/' }
     ]
 })

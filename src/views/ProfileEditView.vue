@@ -1,45 +1,57 @@
 <template>
-  <div class="page" :style="pageBgStyle">
+  <div class="page">
     <!-- 顶部返回 -->
     <header class="bar">
       <button class="back" type="button" @click="goBack" aria-label="返回">‹</button>
     </header>
 
-    <!-- 头像 -->
+    <!-- 头像：有图用图，无图占位 -->
     <section class="avatar-sec">
       <div class="avatar-wrap">
         <img class="avatar" :src="avatarSrc" alt="头像" />
         <label class="cam-btn">
           <input type="file" accept="image/*" @change="onPickAvatar" />
-          <img class="cam-icn" :src="replaceImg" alt="上传相机" />
+          <img class="cam-icn" :src="camImg" alt="上传相机" />
         </label>
       </div>
     </section>
 
-    <!-- 相册：横向滑动（最多 9 张；无图灰块；带定位点） -->
+    <!-- 相册：横向滑动，每页3格；空态点击=上传，非空点击=预览 -->
     <section class="gallery">
       <div ref="galleryWrap" class="gallery-wrap" @scroll.passive="onGalleryScroll">
-        <div
-            v-for="(url, i) in displayGallery"
-            :key="i"
-            class="gallery-item"
-            :style="photoStyle(url)"
-            aria-label="相册图片"
-        />
+        <div v-for="(page, pIdx) in galleryPages" :key="pIdx" class="gallery-page">
+          <div
+              v-for="(url, i) in page"
+              :key="i"
+              class="cell"
+              :class="{ empty: !url }"
+              :style="photoStyle(url)"
+              @click="onCellClick(pIdx, i, url)"
+              aria-label="相册图片"
+          />
+        </div>
       </div>
 
-      <div class="dots" v-if="displayGallery.length > 1">
-        <span
-            v-for="i in displayGallery.length"
-            :key="i"
-            class="dot"
-            :class="{ on: i-1 === galleryIndex }"
-        />
+      <div class="dots" v-if="galleryPages.length > 1">
+    <span
+        v-for="i in galleryPages.length"
+        :key="i"
+        class="dot"
+        :class="{ on: i-1 === galleryIndex }"
+    />
       </div>
 
+      <!-- 批量上传 -->
       <input ref="pickPhotos" type="file" accept="image/*" multiple hidden @change="onPickPhotos" />
+      <!-- 指定位置替换/新增 -->
+      <input ref="pickOne" type="file" accept="image/*" hidden @change="onPickOne" />
+
       <button type="button" class="btn-plain" @click="pickPhotos && pickPhotos.click()">修改照片</button>
     </section>
+    <!-- 预览（轻量 lightbox） -->
+    <div v-if="viewer.open" class="viewer" @click.self="viewer.open=false">
+      <img class="viewer-img" :src="viewer.url" alt="预览图" />
+    </div>
 
     <!-- 表单 -->
     <section class="form">
@@ -107,6 +119,7 @@
       </div>
     </section>
 
+    <!-- 底部主按钮：保存/更新 -->
     <button class="primary" :disabled="saving" @click="onSubmit">
       {{ saving ? '保存中…' : '确认' }}
     </button>
@@ -114,18 +127,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import {ref, onMounted, computed, nextTick, reactive} from 'vue'
 import { apiGetProfile, apiUpdateProfile, apiUploadAvatar } from '@/api/profile'
-import replaceImg from '@/assets/replace.png'
-import pageBg from '@/assets/home/bg.png'
+import avatarImg from '@/assets/my/avatar.png'
+import camImg from '@/assets/my/cam.png'
 import dayjs from 'dayjs'
 
-const pageBgStyle = computed(() => ({
-  backgroundImage: `url(${pageBg})`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundRepeat: 'no-repeat'
-}))
+
 
 const profile = ref({
   nickname: '', avatarUrl: '', galleryJson: null, gender: null,
@@ -133,7 +141,7 @@ const profile = ref({
   zodiac: '', hobbies: null, drinking: '', wechat: ''
 })
 
-const avatarSrc = computed(() => profile.value.avatarUrl || replaceImg)
+const avatarSrc = computed(() => profile.value.avatarUrl || avatarImg)
 
 const age = ref()
 const saving = ref(false)
@@ -147,57 +155,107 @@ function toggleHobby(h) {
 
 const drinkOptions = ['经常喝','偶尔喝','不喝酒']
 
-// ===== 相册（最多 9 张；无图灰块） =====
-const gallery = ref([])               // URL[]
-const galleryIndex = ref(0)
-const galleryWrap = ref(null)
-const pickPhotos = ref(null)
 
-const displayGallery = computed(() => {
-  if (!gallery.value || gallery.value.length === 0) return [null] // null = 灰色占位
-  return gallery.value.slice(0, 9)
+// ===== 相册数据 =====
+const gallery = ref([])               // URL[]
+const galleryWrap = ref(null)
+const galleryIndex = ref(0)
+
+// 分页：按3个一组；至少1页（3空）
+const galleryPages = computed(() => {
+  const arr = (gallery.value || []).slice(0, 9)
+  const pages = []
+  for (let i = 0; i < Math.max(1, Math.ceil(arr.length / 3)); i++) {
+    const page = arr.slice(i * 3, i * 3 + 3)
+    while (page.length < 3) page.push(null)
+    pages.push(page)
+  }
+  return pages
 })
+
 function photoStyle(url) {
+  // 仅有图时才用内联样式，避免覆盖类上的空态底色
   return url
-      ? { background: `url(${url}) center/cover no-repeat` }
-      : { background: '#f2f2f6' }
+      ? {
+        backgroundImage: `url(${url})`,
+        backgroundPosition: 'center',
+        backgroundSize: 'cover',
+        backgroundRepeat: 'no-repeat'
+      }
+      : undefined
 }
+
 function onGalleryScroll() {
   const el = galleryWrap.value
   if (!el) return
   const idx = Math.round(el.scrollLeft / el.clientWidth)
-  galleryIndex.value = Math.max(0, Math.min(idx, displayGallery.value.length - 1))
+  galleryIndex.value = Math.max(0, Math.min(idx, galleryPages.value.length - 1))
 }
+
+// 上传（批量，保留原逻辑）
+const pickPhotos = ref(null)
 function onPickPhotos(e) {
   const files = Array.from(e.target.files || [])
   if (!files.length) return
   const urls = files.slice(0, 9).map(f => URL.createObjectURL(f))
   gallery.value = urls
   galleryIndex.value = 0
-  nextTick(() => {
-    if (galleryWrap.value) galleryWrap.value.scrollTo({ left: 0, behavior: 'instant' })
-  })
+  nextTick(() => { galleryWrap.value?.scrollTo({ left: 0, behavior: 'instant' }) })
 }
 
+// 单张替换/新增：点击空/非空 cell 触发
+const pickOne = ref(null)
+const replaceAt = ref(-1) // 线性下标（0..8）
+function onCellClick(pageIdx, inPageIdx, url) {
+  if (!url) {
+    // 空 -> 上传并放到这个位置
+    replaceAt.value = pageIdx * 3 + inPageIdx
+    pickOne.value?.click()
+  } else {
+    // 非空 -> 预览
+    viewer.url = url
+    viewer.open = true
+  }
+}
+function onPickOne(e) {
+  const file = e.target.files && e.target.files[0]
+  if (!file) return
+  const url = URL.createObjectURL(file)
+  const idx = Math.max(0, Math.min(replaceAt.value, 8))
+  // 将图片填到指定位置（不足则补 null）
+  const arr = gallery.value.slice(0, 9)
+  while (arr.length < idx) arr.push(null)
+  if (idx < arr.length) arr.splice(idx, 1, url)
+  else arr.push(url)
+  gallery.value = arr
+  replaceAt.value = -1
+  e.target.value = '' // 允许选择同一文件再次触发
+}
+
+// 轻量预览
+const viewer = reactive({ open: false, url: '' })
+
+
+
+/* ===== 生命周期：拉取、反序列化 ===== */
 onMounted(async () => {
   const data = await apiGetProfile()
   Object.assign(profile.value, data || {})
-  // 兴趣
+
   if (profile.value.hobbies) {
     try { JSON.parse(profile.value.hobbies).forEach(h => selectedHobbies.value.add(h)) } catch {}
   }
-  // 年龄
   if (profile.value.birthday) {
     const yrs = dayjs().diff(dayjs(profile.value.birthday), 'year')
     age.value = yrs > 0 ? yrs : undefined
   }
-  // 相册
   try {
     const arr = JSON.parse(profile.value.galleryJson || '[]')
     gallery.value = Array.isArray(arr) ? arr.slice(0, 9) : []
   } catch { gallery.value = [] }
 })
 
+/* ===== 头像上传 ===== */
 async function onPickAvatar(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
@@ -205,6 +263,7 @@ async function onPickAvatar(e) {
   profile.value.avatarUrl = url
 }
 
+/* ===== 交互：返回 / 保存 ===== */
 function goBack() {
   history.length > 1 ? history.back() : location.assign('/')
 }
@@ -213,13 +272,13 @@ async function onSubmit() {
   // 兴趣
   profile.value.hobbies = JSON.stringify([...selectedHobbies.value])
 
-  // 年龄回推生日（可选）
+  // 年龄回推生日（仅当没选生日）
   if (age.value && !profile.value.birthday) {
     const y = dayjs().year() - Number(age.value)
     profile.value.birthday = `${y}-06-30`
   }
 
-  // 相册
+  // 相册：写回 JSON（这里是预览 URL；你接入后端上传后替换成远端URL再保存）
   profile.value.galleryJson = JSON.stringify(gallery.value || [])
 
   saving.value = true
@@ -237,6 +296,7 @@ async function onSubmit() {
 *,*::before,*::after{box-sizing:border-box}
 .page{
   min-height:100vh; padding:0 16px 96px; position:relative;
+  background:#fff;
   font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
 }
 
@@ -252,25 +312,46 @@ async function onSubmit() {
 .cam-btn input{ position:absolute; inset:0; opacity:0; cursor:pointer }
 .cam-icn{ width:22px; height:22px }
 
-/* 相册：横向轮播 + scroll-snap */
+
+/* 相册：横向轮播 + 每页3格 + scroll-snap */
 .gallery { margin-top:12px }
 .gallery-wrap{
   width:100%;
-  height:160px;
   border-radius:16px;
-  overflow-x:auto;
-  overflow-y:hidden;
+  overflow-x:auto; overflow-y:hidden;
   scroll-snap-type:x mandatory;
-  display:grid;
-  grid-auto-flow:column;
-  grid-auto-columns:100%;   /* 一屏一个 item */
+  display:grid; grid-auto-flow:column; grid-auto-columns:100%;
   background:transparent;
 }
-.gallery-item{
+.gallery-page{
   scroll-snap-align:start;
-  border-radius:16px;
-  background:#f2f2f6;      /* 无图灰块 */
+  display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
+  padding:12px; border-radius:16px;
 }
+.cell{
+  aspect-ratio: 220 / 270;
+  border-radius: 20px;
+  overflow:hidden;
+  background-color:#F3F2F8;   /* ✅ 空态颜色固定写在类上 */
+}
+.cell.empty { cursor: pointer; }
+.cell:not(.empty) { cursor: zoom-in; }
+
+.dots{ display:flex; gap:6px; justify-content:center; margin:6px 0 8px }
+.dot{ width:6px; height:6px; border-radius:50%; background:#e4dff6 }
+.dot.on{ background:#ff7ab1 }
+
+/* 预览层 */
+.viewer{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.8);
+  display: grid; place-items: center;
+  z-index: 1000;
+}
+.viewer-img{
+  max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px;
+}
+
 .dots{ display:flex; gap:6px; justify-content:center; margin:6px 0 8px }
 .dot{ width:6px; height:6px; border-radius:50%; background:#e4dff6 }
 .dot.on{ background:#ff7ab1 }
@@ -289,7 +370,7 @@ async function onSubmit() {
 .chip{ padding:8px 12px; border-radius:999px; border:none; background:#f1f2f6; color:#606a73 }
 .chip.on{ background:#efe5ff; color:#6b56ff; font-weight:600 }
 
-/* 主按钮 */
+/* 底部主按钮 */
 .primary{
   position:fixed; left:16px; right:16px; bottom:16px; height:48px;
   border:none; border-radius:999px; background:linear-gradient(90deg,#f69,#96f);

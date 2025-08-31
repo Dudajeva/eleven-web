@@ -1,5 +1,6 @@
 <template>
-  <nav class="tabbar">
+  <!-- 只保留一个 nav，并用 meta 控制显示 -->
+  <nav v-if="!route.meta?.hideTabbar" class="tabbar">
     <RouterLink
         v-for="t in tabs"
         :key="t.to"
