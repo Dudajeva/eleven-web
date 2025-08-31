@@ -6,15 +6,16 @@
         <h1 class="title">我的</h1>
         <img class="title-arc" :src="arcImg" alt="" />
       </div>
-      <!-- 右侧占位（保持与首页结构一致，后面可放设置/客服等） -->
-      <div style="width:32px;height:32px;"></div>
     </header>
 
     <!-- 内容 -->
     <main class="content">
       <!-- 头像 & 昵称 & 会员 -->
       <section class="profile">
+        <!-- 左：头像 -->
         <img class="avatar" :src="avatarImg" alt="avatar" />
+
+        <!-- 中：昵称和会员信息 -->
         <div class="profile-main">
           <div class="nickname-row">
             <span class="nickname">{{ nickname }}</span>
@@ -24,12 +25,18 @@
                 <img :src="dotSrc(tier)" class="badge-dot" alt="" />
                 <span class="badge-txt">{{ tierText(tier) }}</span>
               </div>
-            </div>          </div>
+            </div>
+          </div>
           <div class="id-row">
             <span class="id-pill" aria-hidden="true">ID</span>
             <span class="id-text">{{ userId }}</span>
           </div>
         </div>
+
+        <!-- 右：设置按钮 -->
+        <button class="setting-btn" @click="goSettings" aria-label="设置">
+          <img :src="goSettingsImg" alt="设置" />
+        </button>
       </section>
 
       <!-- 信息卡片 -->
@@ -91,6 +98,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 
 import replaceImg from '@/assets/replace.png'
@@ -104,6 +112,7 @@ import editProfileImg from '@/assets/my/editProfile.png'
 import feedbackImg from '@/assets/my/feedback.png'
 import callServiceImg from '@/assets/my/callService.png'
 import hideProfileImg from '@/assets/my/hideProfile.png'
+import goSettingsImg from '@/assets/my/goSettings.png'
 
 // 复用首页同款资源
 import badgeNormal from '@/assets/home/badge-normal.png'
@@ -115,6 +124,7 @@ import dotSupreme from '@/assets/home/dot-supreme.png'
 
 // 示例：当前用户会员等级（后续接 Pinia/接口）
 const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
+const router = useRouter()
 
 // 与首页一致的工具函数
 function tierText(t) {
@@ -137,6 +147,7 @@ function dotSrc(t) {
 }
 
 
+
 const pageBgStyle = computed(() => ({
   backgroundImage: `url(${pageBg})`,
   backgroundSize: 'cover',
@@ -153,9 +164,14 @@ const hideProfile = ref(false)
 
 // 路由跳转占位
 function goRecharge() {}
-function goEditProfile() {}
+function goEditProfile(){ router.push('/profile/edit') }
 function goFeedback() {}
 function callService() {}
+
+function goSettings() {
+  router.push('/settings')
+}
+
 </script>
 
 <style scoped>
@@ -207,18 +223,9 @@ function callService() {}
 /* 页面主内容与间距 */
 .content { padding: 8px 12px 80px; }
 
-/* 头像与昵称 */
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 4px 0;
-}
 .avatar {
   width: 64px; height: 64px; border-radius: 50%; object-fit: cover; background: #f2f2f2;
 }
-.profile-main { display: flex; flex-direction: column; gap: 6px; }
-.nickname-row { display: flex; align-items: center; gap: 8px; }
 .nickname { font-size: 20px; font-weight: 700; color: #111; }
 .id-row { display: flex; align-items: center; gap: 6px; }
 .id-text { color: #e85a70; font-size: 13px; }
@@ -369,6 +376,45 @@ function callService() {}
 .badge.tier-normal  .badge-txt { color: #E07E27; }
 .badge.tier-diamond .badge-txt { color: #3A45AD; }
 .badge.tier-supreme .badge-txt { color: #3E4770; }
+
+
+/* 昵称行：按钮跟在最后，使用 margin-left:auto 推到最右 */
+.nickname-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profile {
+  display: flex;
+  align-items: center;   /* ✅ 保证纵向居中 */
+  gap: 12px;
+  margin: 8px 4px 0;
+}
+
+.profile-main {
+  flex: 1;               /* ✅ 占满中间区域 */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;   /* ✅ 图片也垂直居中 */
+  justify-content: center;
+}
+.setting-btn img {
+  width: 27px;
+  height: 27px;
+  display: block;
+}
 
 
 /* 小屏微调：与首页相同的 padding 逻辑 */

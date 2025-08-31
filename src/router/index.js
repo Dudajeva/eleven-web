@@ -8,6 +8,9 @@ const MyView    = () => import('@/views/MyView.vue')   // ✅ 我的页
 const InviteView = () => import('@/views/InviteView.vue')
 const MsgView    = () => import('@/views/MsgView.vue')
 const FeedView   = () => import('@/views/FeedView.vue')
+// src/router/index.js（补充）
+const ProfileEditView = () => import('@/views/ProfileEditView.vue')
+const SettingsView = () => import('@/views/SettingsView.vue')
 
 const router = createRouter({
     history: createWebHistory(),
@@ -17,7 +20,9 @@ const router = createRouter({
         { path: '/invite', name: 'invite', component: InviteView, meta: { requiresAuth: true } }, // 可选
         { path: '/msg',    name: 'msg',    component: MsgView,    meta: { requiresAuth: true } }, // 可选
         { path: '/feed',   name: 'feed',   component: FeedView,   meta: { requiresAuth: true } }, // 可选
-        { path: '/my',     name: 'my',     component: MyView,     meta: { requiresAuth: true } }, // ✅ 新增
+        { path: '/my',     name: 'my',     component: MyView,     meta: { requiresAuth: true } }, // 新增
+        { path: '/profile/edit',     name: 'profileEdit',     component: ProfileEditView,     meta: { requiresAuth: true } },
+        { path: '/settings', name: 'settings', component: SettingsView },
         { path: '/:pathMatch(.*)*', redirect: '/' }
     ]
 })

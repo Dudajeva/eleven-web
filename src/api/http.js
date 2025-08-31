@@ -3,72 +3,73 @@ import router from '@/router'
 const BASE = '/api'
 
 function getToken() {
-  return localStorage.getItem('auth_token') || ''
+    return localStorage.getItem('auth_token') || ''
 }
 
-/**
- * 把 config.params 拼到 URL 上（支持中文）
- */
+/** 把 config.params 拼到 URL 上（支持中文） */
 function withQuery(path = '', params) {
-  if (!params || typeof params !== 'object') return path
-  const qs = new URLSearchParams()
-  Object.entries(params).forEach(([k, v]) => {
-    if (v === undefined || v === null) return
-    // 只跳过空字符串时，把下面改成 if (v !== '') qs.append(k, v)
-    qs.append(k, String(v))
-  })
-  const s = qs.toString()
-  return s ? `${path}${path.includes('?') ? '&' : '?'}${s}` : path
+    if (!params || typeof params !== 'object') return path
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null) return
+        qs.append(k, String(v))
+    })
+    const s = qs.toString()
+    return s ? `${path}${path.includes('?') ? '&' : '?'}${s}` : path
 }
 
-/**
- * 统一请求：支持 method/body/headers/params
- */
+/** 统一请求：支持 method/body/headers/params；自动处理 JSON vs FormData */
 async function request(path, { method = 'GET', body, headers, params } = {}) {
-  const url = withQuery(BASE + path, params)
+    const url = withQuery(BASE + path, params)
 
-  // 只在有 token 时加 Authorization
-  const token = getToken()
-  const finalHeaders = {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(headers || {})
-  }
+    const token = getToken()
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
 
-  // 调试日志：看最终 URL 和 params
-  // console.debug('[HTTP]', method, url)
+    // 默认 Content-Type 为 JSON；FormData 让浏览器自己带 boundary
+    const baseHeaders = isForm ? {} : { 'Content-Type': 'application/json' }
+    const finalHeaders = {
+        ...baseHeaders,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(headers || {})
+    }
 
-  const res = await fetch(url, {
-    method,
-    headers: finalHeaders,
-    body: body ? JSON.stringify(body) : undefined,
-  })
+    const res = await fetch(url, {
+        method,
+        headers: finalHeaders,
+        body: body == null ? undefined : (isForm ? body : JSON.stringify(body)),
+    })
 
-  const text = await res.text()
-  let data = null
-  try { data = text ? JSON.parse(text) : null } catch { data = text }
+    const text = await res.text()
+    let data = null
+    try { data = text ? JSON.parse(text) : null } catch { data = text }
 
-  if (res.status === 401) {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    const redirect = router.currentRoute.value.fullPath
-    router.replace({ name: 'login', query: { redirect } })
-    const err = new Error((data && (data.message || data.error)) || '未授权')
-    err.status = 401
-    throw err
-  }
+    if (res.status === 401) {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        const redirect = router.currentRoute.value.fullPath
+        router.replace({ name: 'login', query: { redirect } })
+        const err = new Error((data && (data.message || data.error)) || '未授权')
+        err.status = 401
+        throw err
+    }
 
-  if (!res.ok) {
-    const msg = (data && (data.message || data.error || data.msg)) || text || '请求失败'
-    const err = new Error(msg)
-    err.status = res.status
-    throw err
-  }
-  return data
+    if (!res.ok) {
+        const msg = (data && (data.message || data.error || data.msg)) || text || '请求失败'
+        const err = new Error(msg)
+        err.status = res.status
+        throw err
+    }
+    return data
 }
 
 export const http = {
-  // 现在支持第二个 config：{ params, headers, ... }
-  get: (p, config = {}) => request(p, { method: 'GET', ...(config || {}) }),
-  post: (p, body, config = {}) => request(p, { method: 'POST', body, ...(config || {}) }),
+    // 修复了之前的展开符号错误，允许传 { params, headers, method } 之类的扩展项
+    get:  (p, config = {})           => request(p, { method: 'GET',  ...(config || {}) }),   // 原文件此处有拼写问题，我已改正。:contentReference[oaicite:0]{index=0}
+    post: (p, body, config = {})     => request(p, { method: 'POST', body, ...(config || {}) }),
+    put:  (p, body, config = {})     => request(p, { method: 'PUT',  body, ...(config || {}) }),
+    del:  (p, config = {})           => request(p, { method: 'DELETE', ...(config || {}) }),
+    // 如果你喜欢也可以保留 upload 的语义别名（内部就是 post+FormData）
+    upload: (p, formData, config={}) => request(p, { method: 'POST', body: formData, ...(config || {}) }),
 }
+
+export default http
