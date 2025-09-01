@@ -16,7 +16,7 @@
       </div>
     </section>
 
-    <!-- 相册：横向滑动，每页3格；空态点击=上传，非空点击=预览 -->
+    <!-- 相册：横向滑动（3格/页）；空态点击=上传，非空点击=预览 -->
     <section class="gallery">
       <div ref="galleryWrap" class="gallery-wrap" @scroll.passive="onGalleryScroll">
         <div v-for="(page, pIdx) in galleryPages" :key="pIdx" class="gallery-page">
@@ -33,12 +33,12 @@
       </div>
 
       <div class="dots" v-if="galleryPages.length > 1">
-    <span
-        v-for="i in galleryPages.length"
-        :key="i"
-        class="dot"
-        :class="{ on: i-1 === galleryIndex }"
-    />
+        <span
+            v-for="i in galleryPages.length"
+            :key="i"
+            class="dot"
+            :class="{ on: i-1 === galleryIndex }"
+        />
       </div>
 
       <!-- 批量上传 -->
@@ -48,6 +48,7 @@
 
       <button type="button" class="btn-plain" @click="pickPhotos && pickPhotos.click()">修改照片</button>
     </section>
+
     <!-- 预览（轻量 lightbox） -->
     <div v-if="viewer.open" class="viewer" @click.self="viewer.open=false">
       <img class="viewer-img" :src="viewer.url" alt="预览图" />
@@ -127,13 +128,11 @@
 </template>
 
 <script setup>
-import {ref, onMounted, computed, nextTick, reactive} from 'vue'
-import { apiGetProfile, apiUpdateProfile, apiUploadAvatar } from '@/api/profile'
+import { ref, onMounted, computed, nextTick, reactive } from 'vue'
+import { apiGetProfile, apiUpdateProfile, apiUploadAvatar, apiUploadGallery } from '@/api/profile'
 import avatarImg from '@/assets/my/avatar.png'
 import camImg from '@/assets/my/cam.png'
 import dayjs from 'dayjs'
-
-
 
 const profile = ref({
   nickname: '', avatarUrl: '', galleryJson: null, gender: null,
@@ -154,7 +153,6 @@ function toggleHobby(h) {
 }
 
 const drinkOptions = ['经常喝','偶尔喝','不喝酒']
-
 
 // ===== 相册数据 =====
 const gallery = ref([])               // URL[]
@@ -192,15 +190,20 @@ function onGalleryScroll() {
   galleryIndex.value = Math.max(0, Math.min(idx, galleryPages.value.length - 1))
 }
 
-// 上传（批量，保留原逻辑）
+// 批量上传：选择 -> 直传 OSS -> 得到稳定 URL 数组
 const pickPhotos = ref(null)
-function onPickPhotos(e) {
+async function onPickPhotos(e) {
   const files = Array.from(e.target.files || [])
   if (!files.length) return
-  const urls = files.slice(0, 9).map(f => URL.createObjectURL(f))
-  gallery.value = urls
-  galleryIndex.value = 0
-  nextTick(() => { galleryWrap.value?.scrollTo({ left: 0, behavior: 'instant' }) })
+  try {
+    const urls = await apiUploadGallery(files)
+    gallery.value = urls.slice(0, 9)
+    galleryIndex.value = 0
+    await nextTick()
+    galleryWrap.value?.scrollTo({ left: 0, behavior: 'auto' })
+  } finally {
+    e.target.value = ''
+  }
 }
 
 // 单张替换/新增：点击空/非空 cell 触发
@@ -208,34 +211,33 @@ const pickOne = ref(null)
 const replaceAt = ref(-1) // 线性下标（0..8）
 function onCellClick(pageIdx, inPageIdx, url) {
   if (!url) {
-    // 空 -> 上传并放到这个位置
     replaceAt.value = pageIdx * 3 + inPageIdx
     pickOne.value?.click()
   } else {
-    // 非空 -> 预览
     viewer.url = url
     viewer.open = true
   }
 }
-function onPickOne(e) {
+
+async function onPickOne(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
-  const url = URL.createObjectURL(file)
-  const idx = Math.max(0, Math.min(replaceAt.value, 8))
-  // 将图片填到指定位置（不足则补 null）
-  const arr = gallery.value.slice(0, 9)
-  while (arr.length < idx) arr.push(null)
-  if (idx < arr.length) arr.splice(idx, 1, url)
-  else arr.push(url)
-  gallery.value = arr
-  replaceAt.value = -1
-  e.target.value = '' // 允许选择同一文件再次触发
+  try {
+    const url = await apiUploadAvatar(file) // 也可单独写 apiUploadOne
+    const idx = Math.max(0, Math.min(replaceAt.value, 8))
+    const arr = gallery.value.slice(0, 9)
+    while (arr.length < idx) arr.push(null)
+    if (idx < arr.length) arr.splice(idx, 1, url)
+    else arr.push(url)
+    gallery.value = arr
+  } finally {
+    replaceAt.value = -1
+    e.target.value = '' // 允许选择同一文件再次触发
+  }
 }
 
 // 轻量预览
 const viewer = reactive({ open: false, url: '' })
-
-
 
 /* ===== 生命周期：拉取、反序列化 ===== */
 onMounted(async () => {
@@ -249,18 +251,23 @@ onMounted(async () => {
     const yrs = dayjs().diff(dayjs(profile.value.birthday), 'year')
     age.value = yrs > 0 ? yrs : undefined
   }
+
+  // 相册：只接受非 blob 的稳定 URL
   try {
     const arr = JSON.parse(profile.value.galleryJson || '[]')
-    gallery.value = Array.isArray(arr) ? arr.slice(0, 9) : []
+    gallery.value = Array.isArray(arr)
+        ? arr.filter(u => typeof u === 'string' && !u.startsWith('blob:')).slice(0, 9)
+        : []
   } catch { gallery.value = [] }
 })
 
-/* ===== 头像上传 ===== */
+/* ===== 头像上传（直传 OSS） ===== */
 async function onPickAvatar(e) {
   const file = e.target.files && e.target.files[0]
   if (!file) return
   const url = await apiUploadAvatar(file)
   profile.value.avatarUrl = url
+  e.target.value = ''
 }
 
 /* ===== 交互：返回 / 保存 ===== */
@@ -278,7 +285,7 @@ async function onSubmit() {
     profile.value.birthday = `${y}-06-30`
   }
 
-  // 相册：写回 JSON（这里是预览 URL；你接入后端上传后替换成远端URL再保存）
+  // 相册：写回 JSON（都是稳定的 https URL）
   profile.value.galleryJson = JSON.stringify(gallery.value || [])
 
   saving.value = true
@@ -312,7 +319,6 @@ async function onSubmit() {
 .cam-btn input{ position:absolute; inset:0; opacity:0; cursor:pointer }
 .cam-icn{ width:22px; height:22px }
 
-
 /* 相册：横向轮播 + 每页3格 + scroll-snap */
 .gallery { margin-top:12px }
 .gallery-wrap{
@@ -332,7 +338,7 @@ async function onSubmit() {
   aspect-ratio: 220 / 270;
   border-radius: 20px;
   overflow:hidden;
-  background-color:#F3F2F8;   /* ✅ 空态颜色固定写在类上 */
+  background-color:#F3F2F8;   /* 空态底色（不会被内联覆盖） */
 }
 .cell.empty { cursor: pointer; }
 .cell:not(.empty) { cursor: zoom-in; }
@@ -351,11 +357,6 @@ async function onSubmit() {
 .viewer-img{
   max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px;
 }
-
-.dots{ display:flex; gap:6px; justify-content:center; margin:6px 0 8px }
-.dot{ width:6px; height:6px; border-radius:50%; background:#e4dff6 }
-.dot.on{ background:#ff7ab1 }
-.btn-plain{ width:100%; height:44px; border:none; border-radius:999px; background:linear-gradient(90deg,#f6a,#96f); color:#fff; font-weight:700 }
 
 /* 表单 */
 .form{ margin-top:12px }
