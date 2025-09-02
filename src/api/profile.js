@@ -44,3 +44,8 @@ export async function apiUploadGallery(files) {
     })
     return Promise.all(tasks) // -> ['https://...','https://...']
 }
+
+/** 切换隐藏开关 */
+export function apiSetHidePhotos(hide) {
+    return http.patch('/profile/hide', { hide })
+}

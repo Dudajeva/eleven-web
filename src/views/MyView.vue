@@ -100,6 +100,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { apiSetHidePhotos } from '@/api/profile'
 
 
 import replaceImg from '@/assets/replace.png'
@@ -122,9 +123,8 @@ import badgeSupreme from '@/assets/home/badge-supreme.png'
 import dotNormal from '@/assets/home/dot-normal.png'
 import dotDiamond from '@/assets/home/dot-diamond.png'
 import dotSupreme from '@/assets/home/dot-supreme.png'
-
 import RechargeDialog from '@/components/RechargeDialog.vue'
-
+import TipsDialog from '@/components/TipsDialog.vue'
 
 // 示例：当前用户会员等级（后续接 Pinia/接口）
 const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
@@ -165,7 +165,6 @@ const nickname = ref('昵称')
 const userId = ref('32887465')
 const expireDate = ref('2025-07-01')
 const inviteLeft = ref(5)
-const hideProfile = ref(false)
 
 // 路由跳转占位
 function goRecharge() {}
@@ -175,6 +174,25 @@ function callService() {}
 
 function goSettings() {
   router.push('/settings')
+}
+const hideProfile = ref(false)        // 原有
+const tips = ref({ open:false, text:'', icon: replaceImg })
+
+async function onToggleHide(e){
+  const next = e.target.checked
+  try {
+    await apiSetHidePhotos(next)
+    tips.value = {
+      open: true,
+      icon: replaceImg,
+      text: next ? '您的照片已隐藏，私聊回复后自动打开' : '您的照片已取消隐藏'
+    }
+    hideProfile.value = next
+  } catch (err) {
+    // 回滚 UI
+    hideProfile.value = !next
+    alert(err?.message || '操作失败，请稍后重试')
+  }
 }
 
 </script>

@@ -70,6 +70,7 @@ export const http = {
     del:  (p, config = {})           => request(p, { method: 'DELETE', ...(config || {}) }),
     // 如果你喜欢也可以保留 upload 的语义别名（内部就是 post+FormData）
     upload: (p, formData, config={}) => request(p, { method: 'POST', body: formData, ...(config || {}) }),
+
 }
 
 export default http
