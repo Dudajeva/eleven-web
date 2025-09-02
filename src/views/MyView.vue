@@ -59,11 +59,12 @@
 
       <!-- 菜单列表 -->
       <section class="menu">
-        <button class="menu-item" @click="goRecharge">
+        <button class="menu-item" @click="showRecharge = true">
           <img class="menu-icon" :src="rechargeImg" alt="充值图标" />
           <span class="menu-text">会员充值</span>
           <img class="menu-arrow" :src="arrowImg" alt="arrow" />
         </button>
+        <RechargeDialog v-model:open="showRecharge" />
 
         <button class="menu-item" @click="goEditProfile">
           <img class="menu-icon" :src="editProfileImg" alt="修改资料" />
@@ -122,9 +123,13 @@ import dotNormal from '@/assets/home/dot-normal.png'
 import dotDiamond from '@/assets/home/dot-diamond.png'
 import dotSupreme from '@/assets/home/dot-supreme.png'
 
+import RechargeDialog from '@/components/RechargeDialog.vue'
+
+
 // 示例：当前用户会员等级（后续接 Pinia/接口）
 const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
 const router = useRouter()
+const showRecharge = ref(false)
 
 // 与首页一致的工具函数
 function tierText(t) {
