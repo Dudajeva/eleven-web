@@ -65,8 +65,9 @@
         <input class="input" v-model.number="profile.heightCm" placeholder="您的身高" inputmode="numeric" />
       </div>
       <div class="row">
-        <label class="label">年龄</label>
-        <input class="input" v-model.number="age" placeholder="您的年龄" inputmode="numeric" />
+        <label class="label">生日</label>
+        <input class="input" type="date" v-model="birthdayStr" />
+        <div v-if="ageComputed !== null" class="age-tip">（{{ ageComputed }} 岁）</div>
       </div>
       <div class="row">
         <label class="label">体重</label>
@@ -115,8 +116,8 @@
 
       <div class="row">
         <label class="label">微信号</label>
-        <div class="subnote">（选填，不展示，只为平台更好的约服务）</div>
         <input class="input" v-model.trim="profile.wechat" placeholder="您的微信号" />
+        <div class="subnote" v-if="!profile.wechat">（选填，不展示，只为平台更好的为您服务）</div>
       </div>
     </section>
 
@@ -142,7 +143,6 @@ const profile = ref({
 
 const avatarSrc = computed(() => profile.value.avatarUrl || avatarImg)
 
-const age = ref()
 const saving = ref(false)
 
 const hobbyOptions = ['健身','跑步','游泳','篮球','羽毛球','瑜伽','骑行','摄影','阅读','看电影','旅行','烘焙','音乐','唱歌','滑雪','台球']
@@ -151,6 +151,16 @@ function toggleHobby(h) {
   const s = selectedHobbies.value
   s.has(h) ? s.delete(h) : s.add(h)
 }
+
+// 生日与年龄
+    const birthdayStr = ref('')       // YYYY-MM-DD
+    const ageComputed = computed(() => {
+    if (!birthdayStr.value) return null
+        const d = dayjs(birthdayStr.value)
+       if (!d.isValid()) return null
+        const yrs = dayjs().diff(d, 'year')
+        return Math.max(0, yrs)
+      })
 
 const drinkOptions = ['经常喝','偶尔喝','不喝酒']
 
@@ -247,11 +257,12 @@ onMounted(async () => {
   if (profile.value.hobbies) {
     try { JSON.parse(profile.value.hobbies).forEach(h => selectedHobbies.value.add(h)) } catch {}
   }
-  if (profile.value.birthday) {
-    const yrs = dayjs().diff(dayjs(profile.value.birthday), 'year')
-    age.value = yrs > 0 ? yrs : undefined
-  }
 
+    // 生日 -> 输入框（如果后端已有生日）
+       if (profile.value.birthday) {
+        const d = dayjs(profile.value.birthday)
+           if (d.isValid()) birthdayStr.value = d.format('YYYY-MM-DD')
+          }
   // 相册：只接受非 blob 的稳定 URL
   try {
     const arr = JSON.parse(profile.value.galleryJson || '[]')
@@ -279,11 +290,10 @@ async function onSubmit() {
   // 兴趣
   profile.value.hobbies = JSON.stringify([...selectedHobbies.value])
 
-  // 年龄回推生日（仅当没选生日）
-  if (age.value && !profile.value.birthday) {
-    const y = dayjs().year() - Number(age.value)
-    profile.value.birthday = `${y}-06-30`
-  }
+    // 生日与年龄：生日选项为准，同时把年龄一并提交（后端可持久化到 user.age）
+    profile.value.birthday = birthdayStr.value || null
+        const age = ageComputed.value
+        if (age !== null) profile.value.age = age
 
   // 相册：写回 JSON（都是稳定的 https URL）
   profile.value.galleryJson = JSON.stringify(gallery.value || [])
@@ -358,11 +368,27 @@ async function onSubmit() {
   max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px;
 }
 
+.btn-plain{
+  display:block;
+  width:100%;
+  height:44px;
+  border:0;
+  appearance:none;
+  -webkit-appearance:none;
+  border-radius:999px;
+  background:linear-gradient(90deg,#f6a,#96f);
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
+  box-shadow:0 6px 16px rgba(0,0,0,.08);
+}
+
 /* 表单 */
 .form{ margin-top:12px }
 .row{ padding:14px 0; border-bottom:1px solid #eee; position:relative }
 .label{ display:block; font-size:14px; color:#9aa4ae }
-.subnote{ position:absolute; right:0; top:0; font-size:12px; color:#9aa4ae }
+.subnote{ margin-top:6px; font-size:12px; color:#9aa4ae }
+.age-tip{ margin-top:6px; font-size:12px; color:#9aa4ae }
 .input{ width:100%; border:none; outline:none; background:transparent; font-size:16px; color:#000; padding-top:8px }
 
 .group{ margin:16px 0 4px }
