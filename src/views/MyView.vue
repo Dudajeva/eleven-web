@@ -52,7 +52,7 @@
         </div>
         <img class="divider" :src="replaceImg" alt="divider" />
         <div class="stat">
-          <div class="value">无限</div>
+          <div class="value">{{dmLeftText}}</div>
           <div class="label">私聊剩余次数</div>
         </div>
       </section>
@@ -88,20 +88,22 @@
           <img class="menu-icon" :src="hideProfileImg" alt="隐藏资料" />
           <span class="menu-text">隐藏资料</span>
           <label class="switch">
-            <input type="checkbox" v-model="hideProfile" />
+            <input type="checkbox" :checked="hideProfile" @change="onToggleHide" />
             <span class="slider"></span>
           </label>
         </div>
       </section>
     </main>
+    <TipsDialog :open="tips.open" :icon="tips.icon" :text="tips.text" @close="tips.open=false" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import {ref, computed, onMounted} from 'vue'
 import { useRouter } from 'vue-router'
 import { apiSetHidePhotos } from '@/api/profile'
-
+import { apiGetMembership } from '@/api/membership'
+import dayjs from 'dayjs'
 
 import replaceImg from '@/assets/replace.png'
 import arcImg from '@/assets/home/arc.png'
@@ -115,6 +117,7 @@ import feedbackImg from '@/assets/my/feedback.png'
 import callServiceImg from '@/assets/my/callService.png'
 import hideProfileImg from '@/assets/my/hideProfile.png'
 import goSettingsImg from '@/assets/my/goSettings.png'
+import placeholderIcon from '@/assets/my/rechargeDialog.png' // 占位，替换成 UI 切图
 
 // 复用首页同款资源
 import badgeNormal from '@/assets/home/badge-normal.png'
@@ -130,6 +133,23 @@ import TipsDialog from '@/components/TipsDialog.vue'
 const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
 const router = useRouter()
 const showRecharge = ref(false)
+const dmLeftText = ref('无限') // 供展示（字符串）
+
+
+onMounted(async () => {
+  try {
+    const m = await apiGetMembership()
+    tier.value = m?.tier || 'normal'
+    // 格式化日期
+    expireDate.value = m?.expireTime ? dayjs(m.expireTime).format('YYYY-MM-DD') : '--'
+    inviteLeft.value = Number.isFinite(m?.inviteLeft) ? m.inviteLeft : 0
+    dmLeftText.value = (m?.dmLeft === -1 || m?.dmLeft === null || m?.dmLeft === undefined)
+        ? '无限' : String(m.dmLeft)
+  } catch (e) {
+    // 保持静默或弹个 toast 均可
+    console.warn('membership load failed', e)
+  }
+})
 
 // 与首页一致的工具函数
 function tierText(t) {
@@ -150,7 +170,6 @@ function dotSrc(t) {
   if (t === 'supreme') return dotSupreme
   return dotNormal
 }
-
 
 
 const pageBgStyle = computed(() => ({
@@ -176,7 +195,7 @@ function goSettings() {
   router.push('/settings')
 }
 const hideProfile = ref(false)        // 原有
-const tips = ref({ open:false, text:'', icon: replaceImg })
+const tips = ref({ open:false, text:'', icon: placeholderIcon })
 
 async function onToggleHide(e){
   const next = e.target.checked
@@ -184,7 +203,7 @@ async function onToggleHide(e){
     await apiSetHidePhotos(next)
     tips.value = {
       open: true,
-      icon: replaceImg,
+      icon: placeholderIcon,
       text: next ? '您的照片已隐藏，私聊回复后自动打开' : '您的照片已取消隐藏'
     }
     hideProfile.value = next
