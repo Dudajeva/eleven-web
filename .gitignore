@@ -14,6 +14,7 @@ yarn.lock
 
 # ---- Build ----
 dist/
+dev-dist/
 build/
 .cache/
 .next/
