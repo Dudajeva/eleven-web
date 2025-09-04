@@ -11,11 +11,14 @@ const FeedView   = () => import('@/views/FeedView.vue')
 // src/router/index.js（补充）
 const ProfileEditView = () => import('@/views/ProfileEditView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
+const RegisterFormView = () => import ('@/views/RegisterFormView.vue')
+
 
 const router = createRouter({
     history: createWebHistory(),
     routes: [
         { path: '/login',  name: 'login',  component: LoginView },
+        { path: '/register', name: 'register', component: RegisterFormView, meta: { hideTabbar: true } },
         { path: '/',       name: 'home',   component: HomeView,  meta: { requiresAuth: true } },
         { path: '/invite', name: 'invite', component: InviteView, meta: { requiresAuth: true } }, // 可选
         { path: '/msg',    name: 'msg',    component: MsgView,    meta: { requiresAuth: true } }, // 可选

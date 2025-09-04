@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { apiLogin } from '@/api/auth'
+import http from "@/api/http";
 
 const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'auth_user'
@@ -38,3 +39,12 @@ export const useAuthStore = defineStore('auth', {
         }
     }
 })
+
+/**
+ * 注册
+ * payload: { identity, password, gender, inviteCode }
+ * 期望后端返回: { token, userId, nickname, ... }
+ */
+export function apiRegister(payload) {
+    return http.post('/auth/register', payload)
+}

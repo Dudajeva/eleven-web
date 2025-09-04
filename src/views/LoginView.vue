@@ -117,7 +117,7 @@ function onForgot() {
 }
 
 function onRegister() {
-  alert('注册：后续接入注册页')
+  router.push('/register')
 }
 
 async function onSubmit() {
