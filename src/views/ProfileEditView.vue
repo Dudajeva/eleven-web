@@ -131,6 +131,9 @@
 <script setup>
 import { ref, onMounted, computed, nextTick, reactive } from 'vue'
 import { apiGetProfile, apiUpdateProfile, apiUploadAvatar, apiUploadGallery } from '@/api/profile'
+import { useAuthStore } from '@/stores/authStore'
+import { useRoute, useRouter } from 'vue-router'
+
 import avatarImg from '@/assets/my/avatar.png'
 import camImg from '@/assets/my/cam.png'
 import dayjs from 'dayjs'
@@ -140,6 +143,10 @@ const profile = ref({
   birthday: null, heightCm: null, weightKg: null, city: '', profession: '',
   zodiac: '', hobbies: null, drinking: '', wechat: ''
 })
+
+const auth = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const avatarSrc = computed(() => profile.value.avatarUrl || avatarImg)
 
@@ -180,6 +187,10 @@ const galleryPages = computed(() => {
   }
   return pages
 })
+
+function isFirstLoginFlow() {
+  return route.query.first === '1' || sessionStorage.getItem('firstLoginPending') === '1'
+}
 
 function photoStyle(url) {
   // 仅有图时才用内联样式，避免覆盖类上的空态底色
@@ -281,9 +292,16 @@ async function onPickAvatar(e) {
   e.target.value = ''
 }
 
-/* ===== 交互：返回 / 保存 ===== */
 function goBack() {
-  history.length > 1 ? history.back() : location.assign('/')
+  if (isFirstLoginFlow()) {
+    // 可选：强制退出，避免用户保留已登录状态绕过流程
+    auth.logout()
+    sessionStorage.removeItem('firstLoginPending')
+    router.replace('/login')
+    return
+  }
+  // 非首次：按普通返回
+  history.length > 1 ? history.back() : router.replace('/')
 }
 
 async function onSubmit() {
@@ -301,6 +319,7 @@ async function onSubmit() {
   saving.value = true
   try {
     await apiUpdateProfile(profile.value)
+    sessionStorage.removeItem('firstLoginPending')
     alert('已保存')
     goBack()
   } finally {

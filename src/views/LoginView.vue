@@ -126,11 +126,14 @@ async function onSubmit() {
   submitting.value = true
   try {
     const res=await auth.login({ identity: identity.value, password: password.value })
-    if (res?.firstLogin) {
 
-      router.replace('/profile/edit')
+    if (res?.firstLogin) {
+      // 会话标记：仅本次会话有效
+      sessionStorage.setItem('firstLoginPending', '1')
+      // 用 replace 避免把登录页留在历史栈里
+      router.replace({ path: '/profile/edit', query: { first: '1' } })
     } else {
-      router.replace('/')
+      router.replace((route.query.redirect || '/') + '')
     }
   } catch (e) {
     // 后端返回 message 优先，否则给出通用提示
