@@ -16,7 +16,6 @@
       </div>
     </section>
 
-    <!-- 相册：横向滑动（3格/页）；空态点击=上传，非空点击=预览 -->
     <section class="gallery">
       <div ref="galleryWrap" class="gallery-wrap" @scroll.passive="onGalleryScroll">
         <div v-for="(page, pIdx) in galleryPages" :key="pIdx" class="gallery-page">
@@ -31,23 +30,41 @@
           />
         </div>
       </div>
+      <!-- 左右箭头（指示可滑动/翻页） -->
+      <button
+          v-if="galleryPages.length > 1 && galleryIndex > 0"
+          type="button"
+          class="nav-arrow left"
+          @click="scrollPrev"
+          aria-label="上一页"
+      >
+        ‹
+      </button>
+      <button
+          v-if="galleryPages.length > 1 && galleryIndex < galleryPages.length - 1"
+          type="button"
+          class="nav-arrow right"
+          @click="scrollNext"
+          aria-label="下一页"
+      >
+        ›
+      </button>
 
       <div class="dots" v-if="galleryPages.length > 1">
-        <span
-            v-for="i in galleryPages.length"
-            :key="i"
-            class="dot"
-            :class="{ on: i-1 === galleryIndex }"
-        />
+    <span
+        v-for="i in galleryPages.length"
+        :key="i"
+        class="dot"
+        :class="{ on: i-1 === galleryIndex }"
+    />
       </div>
 
-      <!-- 批量上传 -->
       <input ref="pickPhotos" type="file" accept="image/*" multiple hidden @change="onPickPhotos" />
-      <!-- 指定位置替换/新增 -->
       <input ref="pickOne" type="file" accept="image/*" hidden @change="onPickOne" />
 
       <button type="button" class="btn-plain" @click="pickPhotos && pickPhotos.click()">修改照片</button>
     </section>
+
 
     <!-- 预览（轻量 lightbox） -->
     <div v-if="viewer.open" class="viewer" @click.self="viewer.open=false">
@@ -133,6 +150,7 @@ import { ref, onMounted, computed, nextTick, reactive } from 'vue'
 import { apiGetProfile, apiUpdateProfile, apiUploadAvatar, apiUploadGallery } from '@/api/profile'
 import { useAuthStore } from '@/stores/authStore'
 import { useRoute, useRouter } from 'vue-router'
+import { apiGetConfig } from '@/api/config'
 
 import avatarImg from '@/assets/my/avatar.png'
 import camImg from '@/assets/my/cam.png'
@@ -175,12 +193,20 @@ const drinkOptions = ['经常喝','偶尔喝','不喝酒']
 const gallery = ref([])               // URL[]
 const galleryWrap = ref(null)
 const galleryIndex = ref(0)
+const DEFAULT_MAX_PHOTOS = 9
+const maxPhotos = ref(DEFAULT_MAX_PHOTOS)
 
 // 分页：按3个一组；至少1页（3空）
 const galleryPages = computed(() => {
-  const arr = (gallery.value || []).slice(0, 9)
+  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
+  const arr = (gallery.value || []).slice(0, limit)
+
+  // 规则：当未满时强制增加一个空位，让用户总能看到“还能再加”
+  if (arr.length < limit) arr.push(null)
+
+  // 分页填充至 3 列
   const pages = []
-  for (let i = 0; i < Math.max(1, Math.ceil(arr.length / 3)); i++) {
+  for (let i = 0; i < Math.ceil(arr.length / 3); i++) {
     const page = arr.slice(i * 3, i * 3 + 3)
     while (page.length < 3) page.push(null)
     pages.push(page)
@@ -215,15 +241,23 @@ function onGalleryScroll() {
 const pickPhotos = ref(null)
 async function onPickPhotos(e) {
   const files = Array.from(e.target.files || [])
+  e.target.value = ''
   if (!files.length) return
+
+  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
+  const room = Math.max(0, limit - gallery.value.length)
+  if (room <= 0) return
+
   try {
-    const urls = await apiUploadGallery(files)
-    gallery.value = urls.slice(0, 9)
-    galleryIndex.value = 0
+    const urls = await apiUploadGallery(files.slice(0, room))
+    // 只追加稳定 URL；不触碰现有已传
+    gallery.value = [...gallery.value, ...urls].slice(0, limit)
     await nextTick()
-    galleryWrap.value?.scrollTo({ left: 0, behavior: 'auto' })
-  } finally {
-    e.target.value = ''
+    // 跳到最后一页让用户看到新图
+    const el = galleryWrap.value
+    if (el) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
+  } catch (err) {
+    console.warn('batch upload failed', err)
   }
 }
 
@@ -242,26 +276,45 @@ function onCellClick(pageIdx, inPageIdx, url) {
 
 async function onPickOne(e) {
   const file = e.target.files && e.target.files[0]
+  e.target.value = ''
   if (!file) return
+  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
   try {
-    const url = await apiUploadAvatar(file) // 也可单独写 apiUploadOne
-    const idx = Math.max(0, Math.min(replaceAt.value, 8))
-    const arr = gallery.value.slice(0, 9)
+    const url = await apiUploadAvatar(file)
+    const idx = Math.max(0, Math.min(replaceAt.value, limit - 1))
+    const arr = gallery.value.slice(0, limit)
+    // 如果是“空位”且当前长度不足索引，补空直到 idx
     while (arr.length < idx) arr.push(null)
     if (idx < arr.length) arr.splice(idx, 1, url)
     else arr.push(url)
-    gallery.value = arr
+    gallery.value = arr.slice(0, limit)
   } finally {
     replaceAt.value = -1
-    e.target.value = '' // 允许选择同一文件再次触发
   }
 }
+// 左右箭头
+function scrollPrev() {
+  const el = galleryWrap.value
+  if (!el) return
+  el.scrollTo({ left: Math.max(0, el.scrollLeft - el.clientWidth), behavior: 'smooth' })
+}
+function scrollNext() {
+  const el = galleryWrap.value
+  if (!el) return
+  el.scrollTo({ left: el.scrollLeft + el.clientWidth, behavior: 'smooth' })
+}
+
 
 // 轻量预览
 const viewer = reactive({ open: false, url: '' })
 
 /* ===== 生命周期：拉取、反序列化 ===== */
 onMounted(async () => {
+    // 拉取最大图片数配置（找不到就走默认）
+    const cfg = await apiGetConfig('gallery.maxPhotos')
+    const parsed = parseInt(cfg?.value, 10)
+    if (Number.isFinite(parsed) && parsed > 0) maxPhotos.value = parsed
+
   const data = await apiGetProfile()
   Object.assign(profile.value, data || {})
 
@@ -277,8 +330,9 @@ onMounted(async () => {
   // 相册：只接受非 blob 的稳定 URL
   try {
     const arr = JSON.parse(profile.value.galleryJson || '[]')
+    const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
     gallery.value = Array.isArray(arr)
-        ? arr.filter(u => typeof u === 'string' && !u.startsWith('blob:')).slice(0, 9)
+        ? arr.filter(u => typeof u === 'string' && !u.startsWith('blob:')).slice(0, limit)
         : []
   } catch { gallery.value = [] }
 })
@@ -349,15 +403,8 @@ async function onSubmit() {
 .cam-icn{ width:22px; height:22px }
 
 /* 相册：横向轮播 + 每页3格 + scroll-snap */
-.gallery { margin-top:12px }
-.gallery-wrap{
-  width:100%;
-  border-radius:16px;
-  overflow-x:auto; overflow-y:hidden;
-  scroll-snap-type:x mandatory;
-  display:grid; grid-auto-flow:column; grid-auto-columns:100%;
-  background:transparent;
-}
+.gallery { margin-top:12px ;position: relative;}
+.gallery-wrap{ position: relative;width:100%; border-radius:16px; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; display:grid; grid-auto-flow:column; grid-auto-columns:100%; background:transparent; }
 .gallery-page{
   scroll-snap-align:start;
   display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
@@ -401,6 +448,32 @@ async function onSubmit() {
   cursor:pointer;
   box-shadow:0 6px 16px rgba(0,0,0,.08);
 }
+
+.nav-arrow{
+  position: absolute;
+  top: 40%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0,0,0,.35);
+  color: #fff;
+  font-size: 28px;         /* 箭头更大 */
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 10;             /* 盖住图片 */
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.nav-arrow.left  { left: -4px; }
+.nav-arrow.right { right: -4px; }
+
+.nav-arrow:active { background: rgba(0,0,0,.45); }
+.nav-arrow:focus-visible { outline: 2px solid rgba(255,255,255,.8); outline-offset: 2px; }
 
 /* 表单 */
 .form{ margin-top:12px }

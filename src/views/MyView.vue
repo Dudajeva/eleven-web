@@ -13,7 +13,7 @@
       <!-- 头像 & 昵称 & 会员 -->
       <section class="profile">
         <!-- 左：头像 -->
-        <img class="avatar" :src="avatarImg" alt="avatar" />
+        <img class="avatar" :src="avatarSrc" alt="avatar" />
 
         <!-- 中：昵称和会员信息 -->
         <div class="profile-main">
@@ -99,9 +99,10 @@
 </template>
 
 <script setup>
-import {ref, computed, onMounted} from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { apiSetHidePhotos } from '@/api/profile'
+import { useAuthStore } from '@/stores/authStore'
+import { apiGetProfile, apiSetHidePhotos } from '@/api/profile'
 import { apiGetMembership } from '@/api/membership'
 import dayjs from 'dayjs'
 
@@ -117,7 +118,7 @@ import feedbackImg from '@/assets/my/feedback.png'
 import callServiceImg from '@/assets/my/callService.png'
 import hideProfileImg from '@/assets/my/hideProfile.png'
 import goSettingsImg from '@/assets/my/goSettings.png'
-import placeholderIcon from '@/assets/my/rechargeDialog.png' // 占位，替换成 UI 切图
+import placeholderIcon from '@/assets/my/rechargeDialog.png' // 占位，后续换 UI 切图
 
 // 复用首页同款资源
 import badgeNormal from '@/assets/home/badge-normal.png'
@@ -126,32 +127,34 @@ import badgeSupreme from '@/assets/home/badge-supreme.png'
 import dotNormal from '@/assets/home/dot-normal.png'
 import dotDiamond from '@/assets/home/dot-diamond.png'
 import dotSupreme from '@/assets/home/dot-supreme.png'
+
 import RechargeDialog from '@/components/RechargeDialog.vue'
 import TipsDialog from '@/components/TipsDialog.vue'
 
-// 示例：当前用户会员等级（后续接 Pinia/接口）
-const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
 const router = useRouter()
+const auth = useAuthStore()
+
+// ===== 会员信息（保持你现有逻辑）=====
+const tier = ref('diamond') // 'normal' | 'diamond' | 'supreme'
 const showRecharge = ref(false)
-const dmLeftText = ref('无限') // 供展示（字符串）
+const dmLeftText = ref('0')
+const expireDate = ref('2025-07-01')
+const inviteLeft = ref(5)
 
-
-onMounted(async () => {
-  try {
-    const m = await apiGetMembership()
-    tier.value = m?.tier || 'normal'
-    // 格式化日期
-    expireDate.value = m?.expireTime ? dayjs(m.expireTime).format('YYYY-MM-DD') : '--'
-    inviteLeft.value = Number.isFinite(m?.inviteLeft) ? m.inviteLeft : 0
-    dmLeftText.value = (m?.dmLeft === -1 || m?.dmLeft === null || m?.dmLeft === undefined)
-        ? '无限' : String(m.dmLeft)
-  } catch (e) {
-    // 保持静默或弹个 toast 均可
-    console.warn('membership load failed', e)
-  }
+// ===== 用户资料（来自接口 + Pinia）=====
+const profile = ref({
+  nickname: '',
+  avatarUrl: '',
+  // …后续还有 city/height 等，这里只用到昵称/头像/隐藏标识
+  hiddenPhotos: false,
 })
 
-// 与首页一致的工具函数
+const avatarSrc = computed(() => profile.value.avatarUrl || avatarImg)
+const nickname = computed(() => profile.value.nickname || auth.user?.nickname || '昵称')
+const userId = computed(() => String(auth.user?.id ?? '—'))
+const hideProfile = ref(false)
+
+// ===== 与首页一致的工具函数 =====
 function tierText(t) {
   if (t === 'diamond') return '钻石会员'
   if (t === 'supreme') return '至尊会员'
@@ -171,7 +174,6 @@ function dotSrc(t) {
   return dotNormal
 }
 
-
 const pageBgStyle = computed(() => ({
   backgroundImage: `url(${pageBg})`,
   backgroundSize: 'cover',
@@ -179,25 +181,45 @@ const pageBgStyle = computed(() => ({
   backgroundRepeat: 'no-repeat'
 }))
 
-// 假数据，后续接 Pinia
-const nickname = ref('昵称')
-const userId = ref('32887465')
-const expireDate = ref('2025-07-01')
-const inviteLeft = ref(5)
+// ===== 初始化：未登录拦截 + 拉取资料/会员 =====
+onMounted(async () => {
+  if (!auth.token) {
+    router.replace('/login')
+    return
+  }
 
-// 路由跳转占位
-function goRecharge() {}
-function goEditProfile(){ router.push('/profile/edit') }
-function goFeedback() {}
-function callService() {}
+  try {
+    const data = await apiGetProfile()
+    if (data && typeof data === 'object') {
+      profile.value = { ...profile.value, ...data }
+      hideProfile.value = !!data.hiddenPhotos
+    }
+  } catch (e) {
+    console.warn('profile load failed', e)
+  }
 
-function goSettings() {
-  router.push('/settings')
-}
-const hideProfile = ref(false)        // 原有
+  try {
+    const m = await apiGetMembership()
+    tier.value = m?.tier || 'normal'
+    expireDate.value = m?.expireTime ? dayjs(m.expireTime).format('YYYY-MM-DD') : '--'
+    inviteLeft.value = Number.isFinite(m?.inviteLeft) ? m.inviteLeft : 0
+    dmLeftText.value = (m?.dmLeft === 0 || m?.dmLeft === null || m?.dmLeft === undefined)
+        ? '0' : String(m.dmLeft)
+  } catch (e) {
+    console.warn('membership load failed', e)
+  }
+})
+
+// ===== 菜单动作 =====
+function goEditProfile () { router.push('/profile/edit') }
+function goSettings () { router.push('/settings') }
+function goFeedback () {}
+function callService () {}
+
+// ===== 隐藏资料：调用后端 + 弹提示 =====
 const tips = ref({ open:false, text:'', icon: placeholderIcon })
 
-async function onToggleHide(e){
+async function onToggleHide(e) {
   const next = e.target.checked
   try {
     await apiSetHidePhotos(next)
@@ -207,14 +229,14 @@ async function onToggleHide(e){
       text: next ? '您的照片已隐藏，私聊回复后自动打开' : '您的照片已取消隐藏'
     }
     hideProfile.value = next
+    profile.value.hiddenPhotos = next
   } catch (err) {
-    // 回滚 UI
-    hideProfile.value = !next
+    hideProfile.value = !next // 回滚 UI
     alert(err?.message || '操作失败，请稍后重试')
   }
 }
-
 </script>
+
 
 <style scoped>
 /* —— 与 HomeView 统一的基础规则 —— */
