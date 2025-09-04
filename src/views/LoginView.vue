@@ -90,7 +90,7 @@
 */
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/authStore'
 
 import bgImg from '@/assets/login/bg@2x.png'
 import logoImg from '@/assets/login/logo@2x.png'
@@ -125,8 +125,13 @@ async function onSubmit() {
   error.value = ''
   submitting.value = true
   try {
-    await auth.login({ identity: identity.value, password: password.value })
-    router.replace((route.query.redirect || '/') + '')
+    const res=await auth.login({ identity: identity.value, password: password.value })
+    if (res?.firstLogin) {
+
+      router.replace('/profile/edit')
+    } else {
+      router.replace('/')
+    }
   } catch (e) {
     // 后端返回 message 优先，否则给出通用提示
     error.value = e?.message || '用户名或密码错误'

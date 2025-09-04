@@ -64,7 +64,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { apiRegister } from '@/stores/auth'
+import { apiRegister } from '@/api/auth'
 import PolicyDialog from '@/components/PolicyDialog.vue'
 import ExamplePopover from '@/components/ExamplePopover.vue'
 
