@@ -16,60 +16,28 @@
       </div>
     </section>
 
-    <section class="gallery">
-      <div ref="galleryWrap" class="gallery-wrap" @scroll.passive="onGalleryScroll">
-        <div v-for="(page, pIdx) in galleryPages" :key="pIdx" class="gallery-page">
-          <div
-              v-for="(url, i) in page"
-              :key="i"
-              class="cell"
-              :class="{ empty: !url }"
-              :style="photoStyle(url)"
-              @click="onCellClick(pIdx, i, url)"
-              aria-label="相册图片"
-          />
-        </div>
-      </div>
-      <!-- 左右箭头（指示可滑动/翻页） -->
-      <button
-          v-if="galleryPages.length > 1 && galleryIndex > 0"
-          type="button"
-          class="nav-arrow left"
-          @click="scrollPrev"
-          aria-label="上一页"
+    <!-- 相册九宫格 -->
+    <section class="grid">
+      <div
+          v-for="(url, idx) in gridSlots"
+          :key="idx"
+          class="cell"
+          :class="{ empty: !url }"
+          :style="photoStyle(url)"
+          @click="onCellClick(idx)"
       >
-        ‹
-      </button>
-      <button
-          v-if="galleryPages.length > 1 && galleryIndex < galleryPages.length - 1"
-          type="button"
-          class="nav-arrow right"
-          @click="scrollNext"
-          aria-label="下一页"
-      >
-        ›
-      </button>
-
-      <div class="dots" v-if="galleryPages.length > 1">
-    <span
-        v-for="i in galleryPages.length"
-        :key="i"
-        class="dot"
-        :class="{ on: i-1 === galleryIndex }"
-    />
+        <button
+            v-if="url"
+            type="button"
+            class="del"
+            aria-label="删除"
+            @click.stop="onDeleteAt(idx)"
+        >×</button>
       </div>
 
-      <input ref="pickPhotos" type="file" accept="image/*" multiple hidden @change="onPickPhotos" />
+      <!-- 文件选择：仅单张 -->
       <input ref="pickOne" type="file" accept="image/*" hidden @change="onPickOne" />
-
-      <button type="button" class="btn-plain" @click="pickPhotos && pickPhotos.click()">修改照片</button>
     </section>
-
-
-    <!-- 预览（轻量 lightbox） -->
-    <div v-if="viewer.open" class="viewer" @click.self="viewer.open=false">
-      <img class="viewer-img" :src="viewer.url" alt="预览图" />
-    </div>
 
     <!-- 表单 -->
     <section class="form">
@@ -77,27 +45,34 @@
         <label class="label">昵称</label>
         <input class="input" v-model.trim="profile.nickname" placeholder="您的昵称" />
       </div>
+
       <div class="row">
         <label class="label">身高</label>
         <input class="input" v-model.number="profile.heightCm" placeholder="您的身高" inputmode="numeric" />
       </div>
+
       <div class="row">
         <label class="label">生日</label>
-        <input class="input" type="date" v-model="birthdayStr" />
-        <div v-if="ageComputed !== null" class="age-tip">（{{ ageComputed }} 岁）</div>
+        <input class="input" readonly :value="birthdayStr || '请选择生日'" @click="pickerOpen = true" />
       </div>
+
+      <BirthdayPicker v-model="birthdayStr" v-model:open="pickerOpen" />
+
       <div class="row">
         <label class="label">体重</label>
         <input class="input" v-model.number="profile.weightKg" placeholder="您的体重" inputmode="numeric" />
       </div>
+
       <div class="row">
         <label class="label">城市</label>
         <input class="input" v-model.trim="profile.city" placeholder="您的城市" />
       </div>
+
       <div class="row">
         <label class="label">职业</label>
         <input class="input" v-model.trim="profile.profession" placeholder="您的职业" />
       </div>
+
       <div class="row">
         <label class="label">星座</label>
         <input class="input" v-model.trim="profile.zodiac" placeholder="您的星座" />
@@ -146,174 +121,125 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick, reactive } from 'vue'
-import { apiGetProfile, apiUpdateProfile, apiUploadAvatar, apiUploadGallery } from '@/api/profile'
-import { useAuthStore } from '@/stores/authStore'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import dayjs from 'dayjs'
+
+import { useAuthStore } from '@/stores/authStore'
+import { apiGetProfile, apiUpdateProfile, apiUploadAvatar, apiUploadGallery } from '@/api/profile'
 import { apiGetConfig } from '@/api/config'
 
 import avatarImg from '@/assets/my/avatar.png'
 import camImg from '@/assets/my/cam.png'
-import dayjs from 'dayjs'
+import BirthdayPicker from "@/components/BirthdayPicker.vue";
 
+/* ===== 基础状态 ===== */
 const profile = ref({
   nickname: '', avatarUrl: '', galleryJson: null, gender: null,
   birthday: null, heightCm: null, weightKg: null, city: '', profession: '',
   zodiac: '', hobbies: null, drinking: '', wechat: ''
 })
-
-const auth = useAuthStore()
-const route = useRoute()
-const router = useRouter()
-
 const avatarSrc = computed(() => profile.value.avatarUrl || avatarImg)
 
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const saving = ref(false)
 
-const hobbyOptions = ['健身','跑步','游泳','篮球','羽毛球','瑜伽','骑行','摄影','阅读','看电影','旅行','烘焙','音乐','唱歌','滑雪','台球']
-const selectedHobbies = ref(new Set())
-function toggleHobby(h) {
-  const s = selectedHobbies.value
-  s.has(h) ? s.delete(h) : s.add(h)
-}
-
-// 生日与年龄
-    const birthdayStr = ref('')       // YYYY-MM-DD
-    const ageComputed = computed(() => {
-    if (!birthdayStr.value) return null
-        const d = dayjs(birthdayStr.value)
-       if (!d.isValid()) return null
-        const yrs = dayjs().diff(d, 'year')
-        return Math.max(0, yrs)
-      })
-
-const drinkOptions = ['经常喝','偶尔喝','不喝酒']
-
-// ===== 相册数据 =====
-const gallery = ref([])               // URL[]
-const galleryWrap = ref(null)
-const galleryIndex = ref(0)
-const DEFAULT_MAX_PHOTOS = 9
-const maxPhotos = ref(DEFAULT_MAX_PHOTOS)
-
-// 分页：按3个一组；至少1页（3空）
-const galleryPages = computed(() => {
-  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
-  const arr = (gallery.value || []).slice(0, limit)
-
-  // 规则：当未满时强制增加一个空位，让用户总能看到“还能再加”
-  if (arr.length < limit) arr.push(null)
-
-  // 分页填充至 3 列
-  const pages = []
-  for (let i = 0; i < Math.ceil(arr.length / 3); i++) {
-    const page = arr.slice(i * 3, i * 3 + 3)
-    while (page.length < 3) page.push(null)
-    pages.push(page)
-  }
-  return pages
+/* ===== 生日 & 年龄 ===== */
+const birthdayStr = ref('')
+const pickerOpen = ref(false)
+const ageComputed = computed(() => {
+  if (!birthdayStr.value) return null
+  const d = dayjs(birthdayStr.value)
+  if (!d.isValid()) return null
+  return Math.max(0, dayjs().diff(d, 'year'))
 })
 
-function isFirstLoginFlow() {
-  return route.query.first === '1' || sessionStorage.getItem('firstLoginPending') === '1'
-}
+/* ===== 兴趣 / 饮酒 ===== */
+const hobbyOptions = ['健身','跑步','游泳','篮球','羽毛球','瑜伽','骑行','摄影','阅读','看电影','旅行','烘焙','音乐','唱歌','滑雪','台球']
+const selectedHobbies = ref(new Set())
+function toggleHobby(h) { const s = selectedHobbies.value; s.has(h) ? s.delete(h) : s.add(h) }
+const drinkOptions = ['经常喝','偶尔喝','不喝酒']
+
+/* ===== 相册：九宫格 ===== */
+const DEFAULT_MAX = 9
+const maxPhotos = ref(DEFAULT_MAX)
+const gallery = ref([]) // 稳定 URL 列表
+
+// 九宫格位槽（长度固定 = maxPhotos，前段是已有图片，后段是 null 占位）
+const gridSlots = computed(() => {
+  const limit = Number(maxPhotos.value) || DEFAULT_MAX
+  const arr = gallery.value.slice(0, limit)
+  while (arr.length < limit) arr.push(null)
+  return arr
+})
 
 function photoStyle(url) {
-  // 仅有图时才用内联样式，避免覆盖类上的空态底色
   return url
-      ? {
-        backgroundImage: `url(${url})`,
-        backgroundPosition: 'center',
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat'
-      }
+      ? { backgroundImage: `url(${url})`, backgroundPosition: 'center', backgroundSize: 'cover', backgroundRepeat: 'no-repeat' }
       : undefined
 }
 
-function onGalleryScroll() {
-  const el = galleryWrap.value
-  if (!el) return
-  const idx = Math.round(el.scrollLeft / el.clientWidth)
-  galleryIndex.value = Math.max(0, Math.min(idx, galleryPages.value.length - 1))
-}
-
-// 批量上传：选择 -> 直传 OSS -> 得到稳定 URL 数组
-const pickPhotos = ref(null)
-async function onPickPhotos(e) {
-  const files = Array.from(e.target.files || [])
-  e.target.value = ''
-  if (!files.length) return
-
-  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
-  const room = Math.max(0, limit - gallery.value.length)
-  if (room <= 0) return
-
-  try {
-    const urls = await apiUploadGallery(files.slice(0, room))
-    // 只追加稳定 URL；不触碰现有已传
-    gallery.value = [...gallery.value, ...urls].slice(0, limit)
-    await nextTick()
-    // 跳到最后一页让用户看到新图
-    const el = galleryWrap.value
-    if (el) el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
-  } catch (err) {
-    console.warn('batch upload failed', err)
-  }
-}
-
-// 单张替换/新增：点击空/非空 cell 触发
+// 点击格子：有图=替换；空位=新增
 const pickOne = ref(null)
-const replaceAt = ref(-1) // 线性下标（0..8）
-function onCellClick(pageIdx, inPageIdx, url) {
-  if (!url) {
-    replaceAt.value = pageIdx * 3 + inPageIdx
-    pickOne.value?.click()
-  } else {
-    viewer.url = url
-    viewer.open = true
-  }
+const replaceAt = ref(-1)
+
+function onCellClick(index, url) {
+  replaceAt.value = index
+  pickOne.value?.click()
 }
 
+// 替换 / 新增一张
 async function onPickOne(e) {
   const file = e.target.files && e.target.files[0]
   e.target.value = ''
   if (!file) return
-  const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
-  try {
-    const url = await apiUploadAvatar(file)
-    const idx = Math.max(0, Math.min(replaceAt.value, limit - 1))
-    const arr = gallery.value.slice(0, limit)
-    // 如果是“空位”且当前长度不足索引，补空直到 idx
-    while (arr.length < idx) arr.push(null)
-    if (idx < arr.length) arr.splice(idx, 1, url)
-    else arr.push(url)
-    gallery.value = arr.slice(0, limit)
-  } finally {
-    replaceAt.value = -1
+  const url = await apiUploadAvatar(file)
+  const limit = Number(maxPhotos.value) || DEFAULT_MAX
+  const arr = gallery.value.slice(0, limit)
+  if (replaceAt.value >= arr.length) {
+    // 新增：落在空位，直接 push（但仍保证不超上限）
+    arr.push(url)
+  } else {
+    // 替换：覆盖原位置
+    arr.splice(replaceAt.value, 1, url)
+  }
+  gallery.value = arr.slice(0, limit)
+  replaceAt.value = -1
+}
+
+// 删除：右侧顺延左移
+function onDeleteAt(index) {
+  const arr = gallery.value.slice()
+  // 只在 index < 当前图片数时有效
+  if (index < arr.length) {
+    arr.splice(index, 1)
+    gallery.value = arr
   }
 }
-// 左右箭头
-function scrollPrev() {
-  const el = galleryWrap.value
-  if (!el) return
-  el.scrollTo({ left: Math.max(0, el.scrollLeft - el.clientWidth), behavior: 'smooth' })
+
+/* ===== 首登强制流 & 返回 ===== */
+function isFirstLoginFlow() {
+  return route.query.first === '1' || sessionStorage.getItem('firstLoginPending') === '1'
 }
-function scrollNext() {
-  const el = galleryWrap.value
-  if (!el) return
-  el.scrollTo({ left: el.scrollLeft + el.clientWidth, behavior: 'smooth' })
+function goBack() {
+  if (isFirstLoginFlow()) {
+    auth.logout()
+    sessionStorage.removeItem('firstLoginPending')
+    router.replace('/login')
+  } else {
+    history.length > 1 ? history.back() : router.replace('/')
+  }
 }
 
-
-// 轻量预览
-const viewer = reactive({ open: false, url: '' })
-
-/* ===== 生命周期：拉取、反序列化 ===== */
+/* ===== 生命周期：加载配置与资料 ===== */
 onMounted(async () => {
-    // 拉取最大图片数配置（找不到就走默认）
+  try {
     const cfg = await apiGetConfig('gallery.maxPhotos')
-    const parsed = parseInt(cfg?.value, 10)
-    if (Number.isFinite(parsed) && parsed > 0) maxPhotos.value = parsed
+    const n = parseInt(cfg?.value, 10)
+    if (Number.isFinite(n) && n > 0) maxPhotos.value = n
+  } catch {}
 
   const data = await apiGetProfile()
   Object.assign(profile.value, data || {})
@@ -321,18 +247,14 @@ onMounted(async () => {
   if (profile.value.hobbies) {
     try { JSON.parse(profile.value.hobbies).forEach(h => selectedHobbies.value.add(h)) } catch {}
   }
-
-    // 生日 -> 输入框（如果后端已有生日）
-       if (profile.value.birthday) {
-        const d = dayjs(profile.value.birthday)
-           if (d.isValid()) birthdayStr.value = d.format('YYYY-MM-DD')
-          }
-  // 相册：只接受非 blob 的稳定 URL
+  if (profile.value.birthday) {
+    const d = dayjs(profile.value.birthday)
+    if (d.isValid()) birthdayStr.value = d.format('YYYY-MM-DD')
+  }
   try {
     const arr = JSON.parse(profile.value.galleryJson || '[]')
-    const limit = Number(maxPhotos.value) || DEFAULT_MAX_PHOTOS
     gallery.value = Array.isArray(arr)
-        ? arr.filter(u => typeof u === 'string' && !u.startsWith('blob:')).slice(0, limit)
+        ? arr.filter(u => typeof u === 'string' && !u.startsWith('blob:')).slice(0, Number(maxPhotos.value) || DEFAULT_MAX)
         : []
   } catch { gallery.value = [] }
 })
@@ -346,28 +268,12 @@ async function onPickAvatar(e) {
   e.target.value = ''
 }
 
-function goBack() {
-  if (isFirstLoginFlow()) {
-    // 可选：强制退出，避免用户保留已登录状态绕过流程
-    auth.logout()
-    sessionStorage.removeItem('firstLoginPending')
-    router.replace('/login')
-    return
-  }
-  // 非首次：按普通返回
-  history.length > 1 ? history.back() : router.replace('/')
-}
-
+/* ===== 保存 ===== */
 async function onSubmit() {
-  // 兴趣
   profile.value.hobbies = JSON.stringify([...selectedHobbies.value])
-
-    // 生日与年龄：生日选项为准，同时把年龄一并提交（后端可持久化到 user.age）
-    profile.value.birthday = birthdayStr.value || null
-        const age = ageComputed.value
-        if (age !== null) profile.value.age = age
-
-  // 相册：写回 JSON（都是稳定的 https URL）
+  profile.value.birthday = birthdayStr.value || null
+  const age = ageComputed.value
+  if (age !== null) profile.value.age = age
   profile.value.galleryJson = JSON.stringify(gallery.value || [])
 
   saving.value = true
@@ -389,7 +295,6 @@ async function onSubmit() {
   background:#fff;
   font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
 }
-
 /* 顶部 */
 .bar{ height:56px; display:flex; align-items:center }
 .back{ width:32px;height:32px;border:none;background:transparent;font-size:24px;cursor:pointer }
@@ -402,78 +307,48 @@ async function onSubmit() {
 .cam-btn input{ position:absolute; inset:0; opacity:0; cursor:pointer }
 .cam-icn{ width:22px; height:22px }
 
-/* 相册：横向轮播 + 每页3格 + scroll-snap */
-.gallery { margin-top:12px ;position: relative;}
-.gallery-wrap{ position: relative;width:100%; border-radius:16px; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; display:grid; grid-auto-flow:column; grid-auto-columns:100%; background:transparent; }
-.gallery-page{
-  scroll-snap-align:start;
-  display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;
-  padding:12px; border-radius:16px;
+/* 相册九宫格 */
+.grid{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
 }
 .cell{
-  aspect-ratio: 220 / 270;
-  border-radius: 20px;
-  overflow:hidden;
-  background-color:#F3F2F8;   /* 空态底色（不会被内联覆盖） */
+  position:relative;
+  aspect-ratio:1/1;
+  border-radius:16px;
+  background-size:cover;
+  background: #F3F2F8 center;
 }
 .cell.empty { cursor: pointer; }
-.cell:not(.empty) { cursor: zoom-in; }
+.cell:not(.empty) { cursor: pointer; }
 
-.dots{ display:flex; gap:6px; justify-content:center; margin:6px 0 8px }
-.dot{ width:6px; height:6px; border-radius:50%; background:#e4dff6 }
-.dot.on{ background:#ff7ab1 }
 
-/* 预览层 */
-.viewer{
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.8);
-  display: grid; place-items: center;
-  z-index: 1000;
-}
-.viewer-img{
-  max-width: 92vw; max-height: 92vh; object-fit: contain; border-radius: 8px;
+.del{
+  position:absolute;
+  left:8px; bottom:8px;
+  width:28px; height:28px;
+  border:none; border-radius:50%;
+  background:#ff4d4f;
+  color:#fff; font-size:18px;
+  display:grid; place-items:center;
+  cursor:pointer;
+  box-shadow:0 2px 6px rgba(0,0,0,.2);
 }
 
+/* 上传按钮 */
 .btn-plain{
+  margin-top:12px;
   display:block;
   width:100%;
   height:44px;
-  border:0;
-  appearance:none;
-  -webkit-appearance:none;
+  border:0; appearance:none; -webkit-appearance:none;
   border-radius:999px;
   background:linear-gradient(90deg,#f6a,#96f);
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
+  color:#fff; font-weight:700; cursor:pointer;
   box-shadow:0 6px 16px rgba(0,0,0,.08);
 }
-
-.nav-arrow{
-  position: absolute;
-  top: 40%;
-  transform: translateY(-50%);
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0,0,0,.35);
-  color: #fff;
-  font-size: 28px;         /* 箭头更大 */
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  z-index: 10;             /* 盖住图片 */
-  box-shadow: 0 2px 8px rgba(0,0,0,.18);
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-.nav-arrow.left  { left: -4px; }
-.nav-arrow.right { right: -4px; }
-
-.nav-arrow:active { background: rgba(0,0,0,.45); }
-.nav-arrow:focus-visible { outline: 2px solid rgba(255,255,255,.8); outline-offset: 2px; }
 
 /* 表单 */
 .form{ margin-top:12px }
@@ -483,6 +358,7 @@ async function onSubmit() {
 .age-tip{ margin-top:6px; font-size:12px; color:#9aa4ae }
 .input{ width:100%; border:none; outline:none; background:transparent; font-size:16px; color:#000; padding-top:8px }
 
+/* 爱好&饮酒 */
 .group{ margin:16px 0 4px }
 .g-title{ font-size:14px; color:#9aa4ae; margin-bottom:8px }
 .chips{ display:flex; flex-wrap:wrap; gap:10px 10px }
